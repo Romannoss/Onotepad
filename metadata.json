@@ -1,0 +1,6 @@
+{
+  "name": "Bloco de Notas Android",
+  "description": "Aplicativo de bloco de notas em abas para Android com suporte a leitura e gravação de arquivos .txt, temas claro e escuro, barra reposicionável e formatação de texto.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
