@@ -1,5 +1,17 @@
 import React from 'react';
-import { Menu, Plus, Save, Sun, Moon, ArrowDownUp, Search, Bold, Italic, Underline } from 'lucide-react';
+import {
+  Menu,
+  Plus,
+  Save,
+  Bold,
+  Italic,
+  Underline,
+  Mic,
+  Sparkles,
+  Image as ImageIcon,
+  Highlighter,
+  FileText
+} from 'lucide-react';
 import { AppSettings, NoteTab } from '../types';
 import { TabsStrip } from './TabsStrip';
 
@@ -14,6 +26,11 @@ interface MainBarProps {
   onOpenMenu: () => void;
   onSaveFile: () => void;
   onFormat: (type: 'bold' | 'italic' | 'underline') => void;
+  onHighlight: () => void;
+  onOpenVoiceTyping: () => void;
+  onOpenGeminiSearch: () => void;
+  onOpenImageModal: () => void;
+  activeHighlightColor: string;
   isSaving: boolean;
 }
 
@@ -28,6 +45,11 @@ export const MainBar: React.FC<MainBarProps> = ({
   onOpenMenu,
   onSaveFile,
   onFormat,
+  onHighlight,
+  onOpenVoiceTyping,
+  onOpenGeminiSearch,
+  onOpenImageModal,
+  activeHighlightColor,
   isSaving,
 }) => {
   const isDark = settings.theme === 'dark';
@@ -44,36 +66,75 @@ export const MainBar: React.FC<MainBarProps> = ({
       }`}
     >
       {/* Primary Toolbar */}
-      <div className="flex items-center justify-between px-2 sm:px-4 h-14 gap-2">
-        {/* Left Side: App Title / Note Indicator & "+" button shortcut */}
+      <div className="flex items-center justify-between px-2 sm:px-3 h-14 gap-1.5 overflow-x-auto no-scrollbar">
+        {/* Left Side: App Brand & Title */}
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            id="btn-mainbar-new-tab"
-            onClick={onNewTab}
-            title="Criar nova aba (nota + número)"
-            aria-label="Criar nova aba"
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition active:scale-95 shadow-xs ${
-              isDark
-                ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-            }`}
-          >
-            <Plus className="w-4 h-4 stroke-[3]" />
-            <span className="hidden xs:inline">Nova Aba</span>
-          </button>
-
-          <div className="hidden sm:flex flex-col">
-            <span className="text-xs font-bold leading-tight truncate max-w-[120px] md:max-w-[180px]">
-              {activeNote.title}
-            </span>
-            <span className="text-[10px] text-slate-400">
-              {notes.length} {notes.length === 1 ? 'aba aberta' : 'abas abertas'}
+          <div className="flex items-center gap-1.5 px-1 py-1">
+            <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-xs">
+              <FileText className="w-4 h-4 stroke-[2.5]" />
+            </div>
+            <span className={`font-bold text-sm tracking-tight hidden sm:inline ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+              Onotepadd
             </span>
           </div>
         </div>
 
-        {/* Quick Format Shortcuts Bar (In the middle for fast touch access) */}
-        <div className="flex items-center gap-1 bg-slate-800/40 dark:bg-slate-950/40 p-1 rounded-xl border border-slate-700/40">
+        {/* Action Shortcuts Bar: Voice, Gemini, Image, Highlighter, Bold, Italic, Underline */}
+        <div className="flex items-center gap-1 bg-slate-800/40 dark:bg-slate-950/40 p-1 rounded-xl border border-slate-700/40 shrink-0">
+          {/* Escrever por Voz */}
+          <button
+            id="quick-btn-voice"
+            onClick={onOpenVoiceTyping}
+            title="Escrever por Voz (Ditado)"
+            aria-label="Escrever por Voz"
+            className="p-2 rounded-lg hover:bg-rose-500/20 text-rose-400 transition active:scale-90"
+          >
+            <Mic className="w-4 h-4" />
+          </button>
+
+          {/* Pesquisar com Gemini */}
+          <button
+            id="quick-btn-gemini"
+            onClick={onOpenGeminiSearch}
+            title="Pesquisar com Gemini AI"
+            aria-label="Pesquisar com Gemini AI"
+            className="p-2 rounded-lg hover:bg-indigo-500/20 text-indigo-400 transition active:scale-90"
+          >
+            <Sparkles className="w-4 h-4" />
+          </button>
+
+          {/* Adicionar Imagem */}
+          <button
+            id="quick-btn-image"
+            onClick={onOpenImageModal}
+            title="Adicionar ou Gerenciar Imagens"
+            aria-label="Imagens da Nota"
+            className="p-2 rounded-lg hover:bg-pink-500/20 text-pink-400 transition active:scale-90 relative"
+          >
+            <ImageIcon className="w-4 h-4" />
+            {(activeNote.images?.length || 0) > 0 && (
+              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-pink-500" />
+            )}
+          </button>
+
+          <div className="w-px h-5 bg-slate-700/60 mx-0.5" />
+
+          {/* Marcar Texto (Marca-Texto) com indicador de cor */}
+          <button
+            id="quick-btn-highlight"
+            onClick={onHighlight}
+            title={`Marcar / Desmarcar Texto (Marca-Texto ${activeHighlightColor})`}
+            aria-label="Marcar ou Desmarcar Texto"
+            className="p-2 rounded-lg hover:bg-amber-500/20 text-amber-300 transition active:scale-90 relative"
+          >
+            <Highlighter className="w-4 h-4" />
+            <span
+              className="absolute bottom-1 right-1 w-2 h-2 rounded-full border border-slate-900"
+              style={{ backgroundColor: activeHighlightColor }}
+            />
+          </button>
+
+          {/* Bold, Italic, Underline */}
           <button
             id="quick-btn-bold"
             onClick={() => onFormat('bold')}
@@ -127,7 +188,7 @@ export const MainBar: React.FC<MainBarProps> = ({
             }`}
           >
             <Save className="w-4 h-4" />
-            <span className="hidden sm:inline">Salvar .txt</span>
+            <span className="hidden md:inline">Salvar .txt</span>
           </button>
 
           {/* Right Hamburger Menu Button */}

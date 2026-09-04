@@ -15,19 +15,46 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoSaveDelay: 400,
 };
 
+/**
+ * Calculates the next available sequential tab number based on currently open notes.
+ * Finds the lowest unused integer >= 1 so tab numbers are always sequential and never jump:
+ * e.g., if only "nota 1" exists, next is guaranteed to be 2 ("nota 2").
+ */
+export function getNextTabNumber(existingNotes: NoteTab[]): number {
+  if (!existingNotes || existingNotes.length === 0) {
+    return 1;
+  }
+
+  const usedNumbers = new Set<number>();
+  existingNotes.forEach((note) => {
+    if (typeof note.tabNumber === 'number' && note.tabNumber > 0) {
+      usedNumbers.add(note.tabNumber);
+    }
+    const match = note.title.match(/nota\s*(\d+)/i);
+    if (match) {
+      const parsed = parseInt(match[1], 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        usedNumbers.add(parsed);
+      }
+    }
+  });
+
+  let candidate = 1;
+  while (usedNumbers.has(candidate)) {
+    candidate++;
+  }
+  return candidate;
+}
+
 export function loadNotesFromStorage(): { notes: NoteTab[]; activeId: string; nextTabNumber: number } {
   try {
     const rawNotes = localStorage.getItem(STORAGE_NOTES_KEY);
     const rawActiveId = localStorage.getItem(STORAGE_ACTIVE_TAB_KEY);
-    const rawCounter = localStorage.getItem(STORAGE_COUNTER_KEY);
 
     let notes: NoteTab[] = [];
     if (rawNotes) {
       notes = JSON.parse(rawNotes);
     }
-
-    let nextTabNumber = rawCounter ? parseInt(rawCounter, 10) : 1;
-    if (isNaN(nextTabNumber) || nextTabNumber < 1) nextTabNumber = 1;
 
     // If no notes exist initially, create the first default note "nota 1"
     if (!notes || notes.length === 0) {
@@ -40,12 +67,28 @@ export function loadNotesFromStorage(): { notes: NoteTab[]; activeId: string; ne
         updatedAt: Date.now(),
       };
       notes = [firstNote];
-      nextTabNumber = 2;
+      const nextTabNumber = 2;
       localStorage.setItem(STORAGE_NOTES_KEY, JSON.stringify(notes));
       localStorage.setItem(STORAGE_COUNTER_KEY, nextTabNumber.toString());
       localStorage.setItem(STORAGE_ACTIVE_TAB_KEY, firstNote.id);
       return { notes, activeId: firstNote.id, nextTabNumber };
     }
+
+    // Automatic fix for the bug in v3.2 where second tab was accidentally named "nota 8":
+    // If only 2 tabs exist, first is "nota 1" and second is "nota 8" (or tabNumber 8) with empty/welcome content
+    if (
+      notes.length === 2 &&
+      notes[0].title.toLowerCase().trim() === 'nota 1' &&
+      notes[1].title.toLowerCase().trim() === 'nota 8' &&
+      (!notes[1].content || notes[1].content.trim() === '')
+    ) {
+      notes[1].title = 'nota 2';
+      notes[1].tabNumber = 2;
+      localStorage.setItem(STORAGE_NOTES_KEY, JSON.stringify(notes));
+    }
+
+    const nextTabNumber = getNextTabNumber(notes);
+    localStorage.setItem(STORAGE_COUNTER_KEY, nextTabNumber.toString());
 
     const activeId = rawActiveId && notes.some(n => n.id === rawActiveId) ? rawActiveId : notes[0].id;
     return { notes, activeId, nextTabNumber };
@@ -94,10 +137,65 @@ export function saveSettingsToStorage(settings: AppSettings): void {
 }
 
 /**
+ * Converts rich HTML content to clean plain text for saving as .txt files
+ */
+export function htmlToPlainText(html: string): string {
+  if (!html) return '';
+  // If plain text without HTML tags
+  if (!/<[a-z][\s\S]*>/i.test(html)) {
+    return html;
+  }
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+
+  // Replace images with descriptive text
+  const images = doc.querySelectorAll('img');
+  images.forEach((img) => {
+    const alt = img.getAttribute('alt') || 'imagem';
+    const marker = doc.createTextNode(`\n[Imagem: ${alt}]\n`);
+    img.parentNode?.replaceChild(marker, img);
+  });
+
+  // Ensure line breaks for block elements
+  const blocks = doc.querySelectorAll('p, div, li, h1, h2, h3, h4, h5, h6, br');
+  blocks.forEach((el) => {
+    if (el.tagName.toLowerCase() === 'br') {
+      el.replaceWith('\n');
+    } else {
+      el.insertAdjacentText('afterend', '\n');
+    }
+  });
+
+  const raw = doc.body.textContent || '';
+  return raw
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * Converts imported plain text from .txt to HTML format for the WYSIWYG editor
+ */
+export function textToEditorHtml(text: string): string {
+  if (!text) return '';
+  // If it already looks like HTML with tags, keep it
+  if (/<[a-z][\s\S]*>/i.test(text)) {
+    return text;
+  }
+  return text
+    .split('\n')
+    .map((line) => (line.trim() ? `<p>${line}</p>` : '<p><br></p>'))
+    .join('');
+}
+
+/**
  * Saves a .txt file directly to the Android device / computer
  */
 export async function saveTextFileToDevice(note: NoteTab): Promise<{ success: boolean; filename: string }> {
-  const content = note.content;
+  const content = htmlToPlainText(note.content);
   const sanitizedTitle = note.title.trim().replace(/[/\\?%*:|"<>]/g, '_') || `nota_${note.tabNumber}`;
   const filename = sanitizedTitle.toLowerCase().endsWith('.txt') ? sanitizedTitle : `${sanitizedTitle}.txt`;
 

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { NoteTab, AppSettings, ToastMessage } from './types';
+import { NoteTab, AppSettings, ToastMessage, NoteImage, HIGHLIGHT_COLORS } from './types';
 import {
   loadNotesFromStorage,
   saveNotesToStorage,
@@ -12,6 +12,8 @@ import {
   saveSettingsToStorage,
   saveTextFileToDevice,
   readTextFile,
+  textToEditorHtml,
+  getNextTabNumber,
   DEFAULT_SETTINGS,
 } from './utils/fileStorage';
 import { MainBar } from './components/MainBar';
@@ -20,6 +22,9 @@ import { HamburgerMenu } from './components/HamburgerMenu';
 import { ToastContainer } from './components/Toast';
 import { RenameModal } from './components/RenameModal';
 import { SearchModal } from './components/SearchModal';
+import { VoiceTypingModal } from './components/VoiceTypingModal';
+import { GeminiSearchModal } from './components/GeminiSearchModal';
+import { ImageModal } from './components/ImageModal';
 
 export default function App() {
   // State from storage
@@ -28,11 +33,20 @@ export default function App() {
   const [nextTabNumber, setNextTabNumber] = useState<number>(1);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
 
-  // UI state
+  // UI modal states
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [renamingNote, setRenamingNote] = useState<NoteTab | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isVoiceOpen, setIsVoiceOpen] = useState(false);
+  const [isGeminiOpen, setIsGeminiOpen] = useState(false);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+
+  // Active highlight color (defaults to yellow #fef08a)
+  const [activeHighlightColor, setActiveHighlightColor] = useState<string>(
+    HIGHLIGHT_COLORS[0].value
+  );
+
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -62,6 +76,9 @@ export default function App() {
     setActiveId(loaded.activeId);
     setNextTabNumber(loaded.nextTabNumber);
     setSettings(loadedSettings);
+    if (loadedSettings.highlightColor) {
+      setActiveHighlightColor(loadedSettings.highlightColor);
+    }
 
     // Apply dark/light theme to document root
     if (loadedSettings.theme === 'dark') {
@@ -74,8 +91,8 @@ export default function App() {
   // Sync theme changes to html class and storage
   const handleToggleTheme = () => {
     setSettings((prev) => {
-      const newTheme = prev.theme === 'dark' ? 'light' : 'dark';
-      const updated = { ...prev, theme: newTheme };
+      const newTheme: 'light' | 'dark' = prev.theme === 'dark' ? 'light' : 'dark';
+      const updated: AppSettings = { ...prev, theme: newTheme };
       saveSettingsToStorage(updated);
       if (newTheme === 'dark') {
         document.documentElement.classList.add('dark');
@@ -90,8 +107,8 @@ export default function App() {
   // Toggle toolbar position (top <-> bottom)
   const handleToggleBarPosition = () => {
     setSettings((prev) => {
-      const newPos = prev.barPosition === 'top' ? 'bottom' : 'top';
-      const updated = { ...prev, barPosition: newPos };
+      const newPos: 'top' | 'bottom' = prev.barPosition === 'top' ? 'bottom' : 'top';
+      const updated: AppSettings = { ...prev, barPosition: newPos };
       saveSettingsToStorage(updated);
       addToast(`Barra posicionada na ${newPos === 'bottom' ? 'parte de baixo' : 'parte superior'} da tela`, 'info');
       return updated;
@@ -123,7 +140,7 @@ export default function App() {
 
   // Create new tab titled "nota + o numero de aba"
   const handleNewTab = () => {
-    const tabNum = nextTabNumber;
+    const tabNum = getNextTabNumber(notes);
     const newNote: NoteTab = {
       id: 'note-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5),
       tabNumber: tabNum,
@@ -131,10 +148,11 @@ export default function App() {
       content: '',
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      images: [],
     };
 
-    const newCounter = tabNum + 1;
     const updatedNotes = [...notes, newNote];
+    const newCounter = getNextTabNumber(updatedNotes);
     setNotes(updatedNotes);
     setActiveId(newNote.id);
     setNextTabNumber(newCounter);
@@ -156,6 +174,7 @@ export default function App() {
 
     const noteToClose = notes.find((n) => n.id === idToClose);
     const updatedNotes = notes.filter((n) => n.id !== idToClose);
+    const newNextNumber = getNextTabNumber(updatedNotes);
 
     let newActiveId = activeId;
     if (activeId === idToClose) {
@@ -166,7 +185,8 @@ export default function App() {
 
     setNotes(updatedNotes);
     setActiveId(newActiveId);
-    triggerAutoSave(updatedNotes, newActiveId, nextTabNumber);
+    setNextTabNumber(newNextNumber);
+    triggerAutoSave(updatedNotes, newActiveId, newNextNumber);
     addToast(`Aba "${noteToClose?.title || 'nota'}" fechada.`, 'info');
   };
 
@@ -199,6 +219,8 @@ export default function App() {
       content: current.content,
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      images: current.images ? [...current.images] : [],
+      fontColor: current.fontColor,
     };
 
     const newCounter = tabNum + 1;
@@ -216,7 +238,6 @@ export default function App() {
     if (!current) return;
 
     if (current.content.trim().length === 0 && notes.length > 1) {
-      // Just close tab if empty
       const updatedNotes = notes.filter((n) => n.id !== activeId);
       const newActiveId = updatedNotes[0].id;
       setNotes(updatedNotes);
@@ -268,30 +289,31 @@ export default function App() {
   const processTextFile = async (file: File) => {
     try {
       const { content, name } = await readTextFile(file);
+      const htmlContent = textToEditorHtml(content);
       const current = notes.find((n) => n.id === activeId);
 
-      // If current tab is empty, load into current tab, else create new tab
-      if (current && current.content.trim().length === 0 && current.title.startsWith('nota ')) {
+      if (current && (!current.content || current.content.trim().length === 0 || current.content === '<p><br></p>') && current.title.startsWith('nota ')) {
         const updatedNotes = notes.map((n) =>
-          n.id === activeId ? { ...n, title: name || n.title, content, updatedAt: Date.now(), fileName: file.name } : n
+          n.id === activeId ? { ...n, title: name || n.title, content: htmlContent, updatedAt: Date.now(), fileName: file.name } : n
         );
         setNotes(updatedNotes);
         triggerAutoSave(updatedNotes, activeId, nextTabNumber);
         addToast(`Arquivo "${file.name}" carregado nesta aba!`, 'success');
       } else {
-        const tabNum = nextTabNumber;
+        const tabNum = getNextTabNumber(notes);
         const newNote: NoteTab = {
           id: 'note-' + Date.now(),
           tabNumber: tabNum,
           title: name || `nota ${tabNum}`,
-          content,
+          content: htmlContent,
           createdAt: Date.now(),
           updatedAt: Date.now(),
           fileName: file.name,
+          images: [],
         };
 
-        const newCounter = tabNum + 1;
         const updatedNotes = [...notes, newNote];
+        const newCounter = getNextTabNumber(updatedNotes);
         setNotes(updatedNotes);
         setActiveId(newNote.id);
         setNextTabNumber(newCounter);
@@ -312,7 +334,128 @@ export default function App() {
       italic: 'Itálico (*texto*)',
       underline: 'Sublinhado (<u>texto</u>)',
     };
-    addToast(`Formatação aplicada: ${labels[type]}`, 'info');
+    addToast(`Formatação: ${labels[type]}`, 'info');
+  };
+
+  // Text highlighting (marca-texto): alterna entre marcar e desmarcar
+  const handleHighlight = (color?: string) => {
+    const highlightColor = color || activeHighlightColor || HIGHLIGHT_COLORS[0].value;
+    if (color) {
+      setActiveHighlightColor(color);
+      setSettings((prev) => {
+        const updated = { ...prev, highlightColor: color };
+        saveSettingsToStorage(updated);
+        return updated;
+      });
+    }
+    const wasMarked = editorRef.current?.applyHighlight(highlightColor);
+    if (wasMarked) {
+      addToast('Texto marcado!', 'info');
+    } else {
+      addToast('Marcação removida do texto.', 'info');
+    }
+  };
+
+  // Set font color for current note tab
+  const handleSetTabFontColor = (color: string) => {
+    setNotes((prevNotes) => {
+      const updated = prevNotes.map((n) =>
+        n.id === activeId ? { ...n, fontColor: color, updatedAt: Date.now() } : n
+      );
+      triggerAutoSave(updated, activeId, nextTabNumber);
+      return updated;
+    });
+    addToast(color ? 'Cor da fonte definida para esta aba!' : 'Cor da fonte restaurada para o padrão', 'info');
+  };
+
+  // Apply font color to selected text
+  const handleColorSelection = (color: string) => {
+    editorRef.current?.applyFontColor(color);
+    addToast('Cor aplicada ao texto selecionado!', 'info');
+  };
+
+  // Voice typing text insertion
+  const handleInsertFromVoice = (text: string) => {
+    editorRef.current?.insertText(text);
+    addToast('Texto ditado por voz inserido!', 'success');
+  };
+
+  // Image actions
+  const handleAddImage = (image: NoteImage) => {
+    setNotes((prevNotes) => {
+      const updated = prevNotes.map((n) => {
+        if (n.id === activeId) {
+          const existingImages = n.images || [];
+          return {
+            ...n,
+            images: [...existingImages, image],
+            updatedAt: Date.now(),
+          };
+        }
+        return n;
+      });
+      triggerAutoSave(updated, activeId, nextTabNumber);
+      return updated;
+    });
+    addToast(`Imagem "${image.name}" anexada à nota!`, 'success');
+  };
+
+  const handleRemoveImage = (imageId: string) => {
+    setNotes((prevNotes) => {
+      const updated = prevNotes.map((n) => {
+        if (n.id === activeId) {
+          return {
+            ...n,
+            images: (n.images || []).filter((img) => img.id !== imageId),
+            updatedAt: Date.now(),
+          };
+        }
+        return n;
+      });
+      triggerAutoSave(updated, activeId, nextTabNumber);
+      return updated;
+    });
+    addToast('Imagem removida da nota.', 'info');
+  };
+
+  const handleInsertImageToEditor = (dataUrl: string, name?: string) => {
+    editorRef.current?.insertImage(dataUrl, name);
+    addToast('Imagem inserida na nota!', 'success');
+  };
+
+  // Gemini Search actions
+  const handleInsertGeminiAtCursor = (text: string) => {
+    editorRef.current?.insertText(text);
+    addToast('Resposta do Gemini inserida no cursor!', 'success');
+  };
+
+  const handleAppendGeminiToEnd = (text: string) => {
+    const current = notes.find((n) => n.id === activeId);
+    if (!current) return;
+    const separator = current.content.endsWith('\n') ? '\n' : '\n\n';
+    handleContentChange(current.content + separator + text);
+    addToast('Resposta do Gemini adicionada ao final da nota!', 'success');
+  };
+
+  const handleCreateNewTabWithGeminiContent = (title: string, content: string) => {
+    const tabNum = nextTabNumber;
+    const newNote: NoteTab = {
+      id: 'note-' + Date.now(),
+      tabNumber: tabNum,
+      title: title || `nota ${tabNum}`,
+      content,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      images: [],
+    };
+
+    const newCounter = tabNum + 1;
+    const updatedNotes = [...notes, newNote];
+    setNotes(updatedNotes);
+    setActiveId(newNote.id);
+    setNextTabNumber(newCounter);
+    triggerAutoSave(updatedNotes, newNote.id, newCounter);
+    addToast(`Nova aba "${newNote.title}" criada com pesquisa do Gemini!`, 'success');
   };
 
   // Replace all text in current note
@@ -331,7 +474,7 @@ export default function App() {
     }
   };
 
-  // Keyboard shortcuts (Ctrl+S / Cmd+S, Ctrl+N, Ctrl+B, Ctrl+I, Ctrl+U)
+  // Keyboard shortcuts (Ctrl+S, Ctrl+N, Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+F, Ctrl+H)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -352,12 +495,15 @@ export default function App() {
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         setIsSearchOpen(true);
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') {
+        e.preventDefault();
+        handleHighlight();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeId, notes, nextTabNumber]);
+  }, [activeId, notes, nextTabNumber, activeHighlightColor]);
 
   // Find currently active note
   const activeNote = notes.find((n) => n.id === activeId) ||
@@ -368,6 +514,7 @@ export default function App() {
       content: '',
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      images: [],
     };
 
   return (
@@ -397,6 +544,11 @@ export default function App() {
         onOpenMenu={() => setIsMenuOpen(true)}
         onSaveFile={handleSaveFile}
         onFormat={handleFormat}
+        onHighlight={() => handleHighlight()}
+        onOpenVoiceTyping={() => setIsVoiceOpen(true)}
+        onOpenGeminiSearch={() => setIsGeminiOpen(true)}
+        onOpenImageModal={() => setIsImageModalOpen(true)}
+        activeHighlightColor={activeHighlightColor}
         isSaving={isSaving}
       />
 
@@ -408,6 +560,8 @@ export default function App() {
           settings={settings}
           onChangeContent={handleContentChange}
           onFileDrop={processTextFile}
+          onAddImage={handleAddImage}
+          onOpenImageModal={() => setIsImageModalOpen(true)}
           isSaving={isSaving}
         />
       </div>
@@ -421,12 +575,18 @@ export default function App() {
         onSaveFile={handleSaveFile}
         onOpenFile={handleOpenFileClick}
         onFormat={handleFormat}
+        onHighlight={handleHighlight}
+        onSetFontColor={handleSetTabFontColor}
+        onColorSelection={handleColorSelection}
         onToggleBarPosition={handleToggleBarPosition}
         onToggleTheme={handleToggleTheme}
         onNewTab={handleNewTab}
         onDeleteCurrentNote={handleDeleteCurrentNote}
         onOpenSearch={() => setIsSearchOpen(true)}
         onDuplicateNote={handleDuplicateNote}
+        onOpenVoiceTyping={() => setIsVoiceOpen(true)}
+        onOpenGeminiSearch={() => setIsGeminiOpen(true)}
+        onOpenImageModal={() => setIsImageModalOpen(true)}
       />
 
       {/* Rename Tab Modal Dialog */}
@@ -447,6 +607,37 @@ export default function App() {
         onClose={() => setIsSearchOpen(false)}
         content={activeNote.content}
         onReplaceAll={handleReplaceAll}
+        theme={settings.theme}
+      />
+
+      {/* Voice-to-Text Dictation Modal */}
+      <VoiceTypingModal
+        isOpen={isVoiceOpen}
+        onClose={() => setIsVoiceOpen(false)}
+        onInsertText={handleInsertFromVoice}
+        theme={settings.theme}
+      />
+
+      {/* Gemini AI Search Modal */}
+      <GeminiSearchModal
+        isOpen={isGeminiOpen}
+        onClose={() => setIsGeminiOpen(false)}
+        activeNoteTitle={activeNote.title}
+        activeNoteContent={activeNote.content}
+        onInsertAtCursor={handleInsertGeminiAtCursor}
+        onAppendToEnd={handleAppendGeminiToEnd}
+        onCreateNewTabWithContent={handleCreateNewTabWithGeminiContent}
+        theme={settings.theme}
+      />
+
+      {/* Image Manager & Attachment Modal */}
+      <ImageModal
+        isOpen={isImageModalOpen}
+        onClose={() => setIsImageModalOpen(false)}
+        images={activeNote.images || []}
+        onAddImage={handleAddImage}
+        onRemoveImage={handleRemoveImage}
+        onInsertImageIntoDocument={handleInsertImageToEditor}
         theme={settings.theme}
       />
 
