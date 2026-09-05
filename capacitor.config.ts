@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.meuapp.blocodenotas',
-  appName: 'Bloco de Notas',
+  appId: 'com.meuapp.Onotepad',
+  appName: 'Onotepad',
   webDir: 'dist'
 };
 

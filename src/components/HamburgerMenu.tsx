@@ -113,7 +113,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                   <div className="flex items-center gap-2">
                     <h3 className="font-bold text-base text-slate-100">Menu de Opções</h3>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      v3.3
+                      v3.4
                     </span>
                   </div>
                   <p className="text-xs text-slate-400">
