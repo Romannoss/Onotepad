@@ -74,7 +74,7 @@ export const MainBar: React.FC<MainBarProps> = ({
               <FileText className="w-4 h-4 stroke-[2.5]" />
             </div>
             <span className={`font-bold text-sm tracking-tight hidden sm:inline ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
-              Onotepadd
+              Onotepad
             </span>
           </div>
         </div>
