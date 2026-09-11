@@ -277,7 +277,87 @@ export default function App() {
     }
   };
 
-  // Process opened .txt file
+  // Helper to open text content into active tab or new tab
+  const openTextContentAsTab = useCallback((fileName: string, rawContent: string) => {
+    try {
+      const cleanName = fileName.replace(/\.[^/.]+$/, '').trim() || 'nota';
+      const htmlContent = textToEditorHtml(rawContent);
+
+      setNotes((prevNotes) => {
+        const curActive = prevNotes.find((n) => n.id === activeId);
+        if (
+          curActive &&
+          (!curActive.content || curActive.content.trim().length === 0 || curActive.content === '<p><br></p>') &&
+          curActive.title.startsWith('nota ')
+        ) {
+          const updatedNotes = prevNotes.map((n) =>
+            n.id === activeId
+              ? { ...n, title: cleanName, content: htmlContent, updatedAt: Date.now(), fileName }
+              : n
+          );
+          triggerAutoSave(updatedNotes, activeId, nextTabNumber);
+          addToast(`Arquivo "${fileName}" aberto nesta aba!`, 'success');
+          return updatedNotes;
+        } else {
+          const tabNum = getNextTabNumber(prevNotes);
+          const newNote: NoteTab = {
+            id: 'note-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5),
+            tabNumber: tabNum,
+            title: cleanName,
+            content: htmlContent,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            fileName,
+            images: [],
+          };
+
+          const updatedNotes = [...prevNotes, newNote];
+          const newCounter = getNextTabNumber(updatedNotes);
+          setActiveId(newNote.id);
+          setNextTabNumber(newCounter);
+          triggerAutoSave(updatedNotes, newNote.id, newCounter);
+          addToast(`Arquivo "${fileName}" aberto em nova aba!`, 'success');
+          return updatedNotes;
+        }
+      });
+    } catch (err) {
+      console.error('Failed to open external text file:', err);
+      addToast('Erro ao abrir o arquivo de texto.', 'error');
+    }
+  }, [activeId, nextTabNumber, triggerAutoSave]);
+
+  // Listener for Android "Abrir com" (Open with) and "Compartilhar com" (Share)
+  useEffect(() => {
+    // 1. Check if an intent opened the app from closed state (cold start)
+    const androidBridge = (window as unknown as { AndroidFileBridge?: { getPendingFile?: () => string | null } }).AndroidFileBridge;
+    if (androidBridge && typeof androidBridge.getPendingFile === 'function') {
+      try {
+        const pending = androidBridge.getPendingFile();
+        if (pending) {
+          const parsed = JSON.parse(pending);
+          if (parsed && typeof parsed.content === 'string') {
+            openTextContentAsTab(parsed.fileName || 'nota.txt', parsed.content);
+          }
+        }
+      } catch (e) {
+        console.error('Error reading pending file from AndroidFileBridge:', e);
+      }
+    }
+
+    // 2. Global listener for when the app is already in memory (warm start via onNewIntent)
+    (window as unknown as { __onAndroidFileOpen?: (fileName: string, content: string) => void }).__onAndroidFileOpen = (
+      fileName: string,
+      content: string
+    ) => {
+      openTextContentAsTab(fileName || 'nota.txt', content || '');
+    };
+
+    return () => {
+      delete (window as unknown as { __onAndroidFileOpen?: unknown }).__onAndroidFileOpen;
+    };
+  }, [openTextContentAsTab]);
+
+  // Process opened .txt file from local picker
   const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -289,37 +369,7 @@ export default function App() {
   const processTextFile = async (file: File) => {
     try {
       const { content, name } = await readTextFile(file);
-      const htmlContent = textToEditorHtml(content);
-      const current = notes.find((n) => n.id === activeId);
-
-      if (current && (!current.content || current.content.trim().length === 0 || current.content === '<p><br></p>') && current.title.startsWith('nota ')) {
-        const updatedNotes = notes.map((n) =>
-          n.id === activeId ? { ...n, title: name || n.title, content: htmlContent, updatedAt: Date.now(), fileName: file.name } : n
-        );
-        setNotes(updatedNotes);
-        triggerAutoSave(updatedNotes, activeId, nextTabNumber);
-        addToast(`Arquivo "${file.name}" carregado nesta aba!`, 'success');
-      } else {
-        const tabNum = getNextTabNumber(notes);
-        const newNote: NoteTab = {
-          id: 'note-' + Date.now(),
-          tabNumber: tabNum,
-          title: name || `nota ${tabNum}`,
-          content: htmlContent,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          fileName: file.name,
-          images: [],
-        };
-
-        const updatedNotes = [...notes, newNote];
-        const newCounter = getNextTabNumber(updatedNotes);
-        setNotes(updatedNotes);
-        setActiveId(newNote.id);
-        setNextTabNumber(newCounter);
-        triggerAutoSave(updatedNotes, newNote.id, newCounter);
-        addToast(`Arquivo "${file.name}" aberto em nova aba!`, 'success');
-      }
+      openTextContentAsTab(file.name || name || 'nota.txt', content);
     } catch (err) {
       console.error('Failed to read file:', err);
       addToast('Erro ao ler o arquivo .txt selecionado.', 'error');
