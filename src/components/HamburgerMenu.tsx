@@ -22,7 +22,8 @@ import {
   Image as ImageIcon,
   Highlighter,
   Palette,
-  Check
+  Check,
+  Volume2
 } from 'lucide-react';
 import { AppSettings, NoteTab, HIGHLIGHT_COLORS, FONT_COLORS } from '../types';
 
@@ -46,6 +47,7 @@ interface HamburgerMenuProps {
   onOpenVoiceTyping: () => void;
   onOpenGeminiSearch: () => void;
   onOpenImageModal: () => void;
+  onOpenVoiceReader: () => void;
 }
 
 export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
@@ -68,6 +70,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
   onOpenVoiceTyping,
   onOpenGeminiSearch,
   onOpenImageModal,
+  onOpenVoiceReader,
 }) => {
   // Local state for color selectors in menu
   const [selectedHighlightColor, setSelectedHighlightColor] = useState<string>(
@@ -113,7 +116,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                   <div className="flex items-center gap-2">
                     <h3 className="font-bold text-base text-slate-100">Menu de Opções</h3>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      v3.5
+                      v4.0
                     </span>
                   </div>
                   <p className="text-xs text-slate-400">
@@ -121,25 +124,58 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                   </p>
                 </div>
               </div>
-              <button
-                id="close-hamburger-menu-button"
-                onClick={onClose}
-                className="p-2 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-                aria-label="Fechar menu"
-              >
-                <X className="w-5 h-5" />
-              </button>
+
+              {/* Actions on right of header: Volume / Audio reader & Close */}
+              <div className="flex items-center gap-1">
+                <button
+                  id="menu-vol-reader-header-btn"
+                  onClick={() => {
+                    onClose();
+                    onOpenVoiceReader();
+                  }}
+                  className="flex items-center justify-center p-2 rounded-full hover:bg-slate-800 text-emerald-400 hover:text-emerald-300 transition-colors"
+                  title="Ler com Gemini (Áudio/Voz)"
+                  aria-label="Ler conteúdo da nota com Gemini"
+                >
+                  <Volume2 className="w-5 h-5 stroke-[2.2]" />
+                </button>
+
+                <button
+                  id="close-hamburger-menu-button"
+                  onClick={onClose}
+                  className="p-2 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                  aria-label="Fechar menu"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Grid of Main Actions */}
             <div className="space-y-4">
-              {/* Novidades v3.0: Voz, Gemini AI & Imagem */}
+              {/* Novidades v4.0: Leitor de Voz Gemini, Voz, Pesquisa & Imagem */}
               <div>
                 <span className="text-[11px] font-semibold tracking-wider text-emerald-400 uppercase px-1 flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5" />
-                  Recursos Inteligentes (v3.0)
+                  Recursos Inteligentes (v4.0)
                 </span>
-                <div className="grid grid-cols-3 gap-2 mt-1.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1.5">
+                  {/* Ler com Gemini (Áudio / Voz) */}
+                  <button
+                    id="menu-voice-reader-grid-btn"
+                    onClick={() => {
+                      onClose();
+                      onOpenVoiceReader();
+                    }}
+                    className="flex flex-col items-center justify-center p-3 rounded-2xl bg-slate-800/90 hover:bg-slate-700 border border-emerald-500/30 active:scale-95 transition text-center group"
+                  >
+                    <div className="p-2 rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-950/40 mb-1.5 group-hover:scale-105 transition">
+                      <Volume2 className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-200">Ler com Gemini</span>
+                    <span className="text-[10px] text-emerald-400/90">Áudio da Nota</span>
+                  </button>
+
                   {/* Escrever por Voz */}
                   <button
                     id="menu-voice-typing-btn"
@@ -523,7 +559,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
 
             {/* Bottom info */}
             <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-              <span>Bloco de Notas Android • v3.0</span>
+              <span>Bloco de Notas Android • v4.0</span>
               <span className="flex items-center gap-1">
                 <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 Salvamento Automático Ativo

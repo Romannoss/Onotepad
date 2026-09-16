@@ -1,6 +1,6 @@
 {
   "name": "Onotepad",
-  "description": "Aplicativo de bloco de notas em abas para Android v3.5 com resolução de abertura única de arquivos via 'Abrir com', padronização da identidade Onotepad, editor visual WYSIWYG, imagens inline integradas ao texto, escrita por voz, Gemini AI e marca-texto alternável.",
+  "description": "Aplicativo de bloco de notas em abas para Android v4.0 com leitura de notas por voz com Gemini, atalhos de teclado Ctrl+W e Ctrl+T, menu hambúrguer fixo na barra de abas no celular e preservado no tablet, editor visual WYSIWYG, imagens inline, escrita por voz e pesquisa com IA.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

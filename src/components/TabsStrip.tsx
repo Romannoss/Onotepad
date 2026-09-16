@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Plus, X, Edit2, FileText } from 'lucide-react';
+import { Plus, X, Edit2, FileText, Menu } from 'lucide-react';
 import { NoteTab } from '../types';
 
 interface TabsStripProps {
@@ -10,6 +10,7 @@ interface TabsStripProps {
   onCloseTab: (id: string, e: React.MouseEvent) => void;
   onRenameTab: (id: string) => void;
   theme: 'light' | 'dark';
+  onOpenMenu?: () => void;
 }
 
 export const TabsStrip: React.FC<TabsStripProps> = ({
@@ -20,6 +21,7 @@ export const TabsStrip: React.FC<TabsStripProps> = ({
   onCloseTab,
   onRenameTab,
   theme,
+  onOpenMenu,
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const activeTabRef = useRef<HTMLButtonElement>(null);
@@ -126,6 +128,23 @@ export const TabsStrip: React.FC<TabsStripProps> = ({
           );
         })}
       </div>
+
+      {/* Mobile-only: Fixed Hamburger Menu button pinned on the bar together with the open tabs */}
+      {onOpenMenu && (
+        <button
+          id="btn-mobile-tabs-hamburger"
+          onClick={onOpenMenu}
+          title="Menu de opções"
+          aria-label="Menu de opções"
+          className={`flex sm:hidden items-center justify-center h-11 w-11 shrink-0 border-l transition-all active:scale-90 ${
+            theme === 'dark'
+              ? 'bg-slate-850 text-slate-200 border-slate-800 hover:bg-slate-800'
+              : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+          }`}
+        >
+          <Menu className="w-5 h-5 stroke-[2.5]" />
+        </button>
+      )}
     </div>
   );
 };

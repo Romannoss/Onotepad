@@ -191,13 +191,13 @@ export const MainBar: React.FC<MainBarProps> = ({
             <span className="hidden md:inline">Salvar .txt</span>
           </button>
 
-          {/* Right Hamburger Menu Button */}
+          {/* Right Hamburger Menu Button (visible on tablet and desktop) */}
           <button
             id="hamburger-menu-button"
             onClick={onOpenMenu}
             aria-label="Abrir menu de opções"
             title="Menu de opções"
-            className={`flex items-center justify-center w-11 h-11 rounded-xl transition active:scale-90 border shadow-xs ${
+            className={`hidden sm:flex items-center justify-center w-11 h-11 rounded-xl transition active:scale-90 border shadow-xs ${
               isDark
                 ? 'bg-slate-800 hover:bg-slate-700 text-slate-100 border-slate-700'
                 : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300'
@@ -208,7 +208,7 @@ export const MainBar: React.FC<MainBarProps> = ({
         </div>
       </div>
 
-      {/* Embedded Tabs Strip with "+" button on left and tabs */}
+      {/* Embedded Tabs Strip with "+" button on left, tabs, and fixed mobile hamburger on right */}
       <TabsStrip
         notes={notes}
         activeId={activeNote.id}
@@ -217,6 +217,7 @@ export const MainBar: React.FC<MainBarProps> = ({
         onCloseTab={onCloseTab}
         onRenameTab={onRenameTab}
         theme={settings.theme}
+        onOpenMenu={onOpenMenu}
       />
     </header>
   );

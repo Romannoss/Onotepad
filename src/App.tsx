@@ -25,6 +25,7 @@ import { SearchModal } from './components/SearchModal';
 import { VoiceTypingModal } from './components/VoiceTypingModal';
 import { GeminiSearchModal } from './components/GeminiSearchModal';
 import { ImageModal } from './components/ImageModal';
+import { GeminiVoiceReaderModal } from './components/GeminiVoiceReaderModal';
 
 export default function App() {
   // State from storage
@@ -41,6 +42,7 @@ export default function App() {
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
   const [isGeminiOpen, setIsGeminiOpen] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [isVoiceReaderOpen, setIsVoiceReaderOpen] = useState(false);
 
   // Active highlight color (defaults to yellow #fef08a)
   const [activeHighlightColor, setActiveHighlightColor] = useState<string>(
@@ -165,8 +167,10 @@ export default function App() {
   };
 
   // Close a tab
-  const handleCloseTab = (idToClose: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCloseTab = (idToClose: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
     if (notes.length <= 1) {
       addToast('Você deve manter ao menos uma aba aberta.', 'warning');
       return;
@@ -566,35 +570,44 @@ export default function App() {
     }
   };
 
-  // Keyboard shortcuts (Ctrl+S, Ctrl+N, Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+F, Ctrl+H)
+  // Keyboard shortcuts (Ctrl+W to close tab, Ctrl+T / Ctrl+N to open tab, Ctrl+S, Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+F, Ctrl+H)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      const isCtrl = e.ctrlKey || e.metaKey;
+      if (!isCtrl) return;
+
+      const key = e.key.toLowerCase();
+      if (key === 'w') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleCloseTab(activeId);
+      } else if (key === 't' || key === 'n') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleNewTab();
+      } else if (key === 's') {
         e.preventDefault();
         handleSaveFile();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
-        e.preventDefault();
-        handleNewTab();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+      } else if (key === 'b') {
         e.preventDefault();
         handleFormat('bold');
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+      } else if (key === 'i') {
         e.preventDefault();
         handleFormat('italic');
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
+      } else if (key === 'u') {
         e.preventDefault();
         handleFormat('underline');
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+      } else if (key === 'f') {
         e.preventDefault();
         setIsSearchOpen(true);
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') {
+      } else if (key === 'h') {
         e.preventDefault();
         handleHighlight();
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [activeId, notes, nextTabNumber, activeHighlightColor]);
 
   // Find currently active note
@@ -679,6 +692,7 @@ export default function App() {
         onOpenVoiceTyping={() => setIsVoiceOpen(true)}
         onOpenGeminiSearch={() => setIsGeminiOpen(true)}
         onOpenImageModal={() => setIsImageModalOpen(true)}
+        onOpenVoiceReader={() => setIsVoiceReaderOpen(true)}
       />
 
       {/* Rename Tab Modal Dialog */}
@@ -730,6 +744,15 @@ export default function App() {
         onAddImage={handleAddImage}
         onRemoveImage={handleRemoveImage}
         onInsertImageIntoDocument={handleInsertImageToEditor}
+        theme={settings.theme}
+      />
+
+      {/* Gemini Voice Reader Modal */}
+      <GeminiVoiceReaderModal
+        isOpen={isVoiceReaderOpen}
+        onClose={() => setIsVoiceReaderOpen(false)}
+        noteTitle={activeNote.title}
+        noteContent={activeNote.content}
         theme={settings.theme}
       />
 
