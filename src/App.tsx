@@ -91,9 +91,9 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
 
-    // v4.2: Ao abrir o app pela primeira vez, pedir permissão para acessar o microfone e armazenamento do aparelho
-    const hasPromptedPermissions = localStorage.getItem('onotepad_microphone_permission_v4_2');
-    if (!hasPromptedPermissions) {
+    // v4.3: Ao abrir o app pela primeira vez, pedir permissão para acessar o armazenamento do aparelho
+    const hasPromptedStorage = localStorage.getItem('onotepad_storage_permission_v4_3');
+    if (!hasPromptedStorage) {
       const timer = setTimeout(() => {
         setIsStoragePermissionOpen(true);
       }, 700);
@@ -768,12 +768,12 @@ export default function App() {
         theme={settings.theme}
       />
 
-      {/* Device Permissions Request Modal (Microphone & Storage - v4.2) */}
+      {/* Storage Permission Request Modal (v4.3) */}
       <StoragePermissionModal
         isOpen={isStoragePermissionOpen}
         onClose={() => setIsStoragePermissionOpen(false)}
         theme={settings.theme}
-        onPermissionGranted={() => addToast('Permissões do microfone e memória ativadas!', 'success')}
+        onPermissionGranted={() => addToast('Permissão de armazenamento confirmada!', 'success')}
       />
 
       {/* Toast Notifications */}

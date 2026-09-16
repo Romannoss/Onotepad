@@ -29,30 +29,19 @@ export const StoragePermissionModal: React.FC<StoragePermissionModalProps> = ({
 
   const handleGrantPermission = async () => {
     try {
-      // 1. Mark in localStorage so it does not ask again on next app launches
-      localStorage.setItem('onotepad_microphone_permission_v4_2', 'granted');
-      localStorage.setItem('onotepad_storage_permission_v4_2', 'granted');
+      // 1. Mark in localStorage for v4.3 so it does not ask again on next app launches
+      localStorage.setItem('onotepad_storage_permission_v4_3', 'granted');
+      localStorage.setItem('onotepad_microphone_permission_v4_3', 'granted');
 
-      // 2. Request browser / WebView microphone permission prompt
-      if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          // Stop all audio tracks immediately after granting
-          stream.getTracks().forEach((track) => track.stop());
-        } catch (mediaErr) {
-          console.warn('Web mediaDevices prompt notice:', mediaErr);
-        }
-      }
-
-      // 3. Trigger native Android OS permissions dialog via bridge
+      // 2. Trigger native Android OS storage & microphone permissions dialog via bridge
       const androidBridge = (
         window as unknown as {
           AndroidFileBridge?: {
-            requestMicrophonePermission?: () => void;
             requestStoragePermission?: () => void;
+            requestMicrophonePermission?: () => void;
             requestAllAppPermissions?: () => void;
-            hasMicrophonePermission?: () => boolean;
             hasStoragePermission?: () => boolean;
+            hasMicrophonePermission?: () => boolean;
           };
         }
       ).AndroidFileBridge;
@@ -61,12 +50,22 @@ export const StoragePermissionModal: React.FC<StoragePermissionModalProps> = ({
         if (typeof androidBridge.requestAllAppPermissions === 'function') {
           androidBridge.requestAllAppPermissions();
         } else {
-          if (typeof androidBridge.requestMicrophonePermission === 'function') {
-            androidBridge.requestMicrophonePermission();
-          }
           if (typeof androidBridge.requestStoragePermission === 'function') {
             androidBridge.requestStoragePermission();
           }
+          if (typeof androidBridge.requestMicrophonePermission === 'function') {
+            androidBridge.requestMicrophonePermission();
+          }
+        }
+      }
+
+      // 3. Request browser / WebView microphone permission prompt if available
+      if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach((track) => track.stop());
+        } catch (mediaErr) {
+          console.warn('Web mediaDevices prompt notice:', mediaErr);
         }
       }
     } catch (e) {
@@ -81,8 +80,8 @@ export const StoragePermissionModal: React.FC<StoragePermissionModalProps> = ({
 
   const handleDismiss = () => {
     try {
-      localStorage.setItem('onotepad_microphone_permission_v4_2', 'dismissed');
-      localStorage.setItem('onotepad_storage_permission_v4_2', 'dismissed');
+      localStorage.setItem('onotepad_storage_permission_v4_3', 'dismissed');
+      localStorage.setItem('onotepad_microphone_permission_v4_3', 'dismissed');
     } catch (e) {
       console.warn('Permission dismiss:', e);
     }
@@ -122,19 +121,19 @@ export const StoragePermissionModal: React.FC<StoragePermissionModalProps> = ({
             <div className="flex items-start justify-between relative">
               <div className="flex items-center gap-3">
                 <div className="relative w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
-                  <Mic className="w-6 h-6 stroke-[2.2]" />
+                  <HardDrive className="w-6 h-6 stroke-[2.2]" />
                   <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-emerald-400">
-                    <HardDrive className="w-3 h-3" />
+                    <Mic className="w-3 h-3" />
                   </div>
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-bold tracking-tight">Permissões do Aparelho</h2>
+                    <h2 className="text-lg font-bold tracking-tight">Permissão de Armazenamento</h2>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      v4.2
+                      v4.3
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400">Microfone e Armazenamento</p>
+                  <p className="text-xs text-slate-400">Armazenamento do Aparelho & Microfone</p>
                 </div>
               </div>
 
@@ -151,31 +150,12 @@ export const StoragePermissionModal: React.FC<StoragePermissionModalProps> = ({
             {/* Body Explanation */}
             <div className="mt-4 space-y-3">
               <p className={`text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                Para que o <strong className="text-emerald-400">Onotepad</strong> possa <strong className="text-emerald-400">ditar notas por voz</strong> e abrir ou salvar seus arquivos <code className="px-1.5 py-0.5 rounded text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">.txt</code> no celular, solicitamos as permissões do aparelho.
+                Para que o <strong className="text-emerald-400">Onotepad</strong> possa acessar a memória do celular para abrir, editar, salvar e exportar suas notas e arquivos <code className="px-1.5 py-0.5 rounded text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">.txt</code>, solicitamos a permissão de armazenamento do aparelho.
               </p>
 
               {/* Feature Points */}
               <div className="space-y-2 pt-1">
-                {/* Microfone Feature */}
-                <div
-                  className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs ${
-                    isDark
-                      ? 'bg-slate-800/60 border-slate-700/60 text-slate-300'
-                      : 'bg-slate-50 border-slate-200 text-slate-700'
-                  }`}
-                >
-                  <div className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400 shrink-0 mt-0.5">
-                    <Mic className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <span className="font-semibold block text-slate-100">Acesso ao Microfone (Ditado por Voz)</span>
-                    <span className="text-slate-400 text-[11px]">
-                      Permite falar e converter sua voz em texto automaticamente em português (pt-BR).
-                    </span>
-                  </div>
-                </div>
-
-                {/* Armazenamento Feature */}
+                {/* Armazenamento Principal Feature */}
                 <div
                   className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs ${
                     isDark
@@ -187,9 +167,47 @@ export const StoragePermissionModal: React.FC<StoragePermissionModalProps> = ({
                     <HardDrive className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <span className="font-semibold block text-slate-100">Armazenamento Local (Arquivos .txt)</span>
+                    <span className="font-semibold block text-slate-100">Armazenamento Interno do Celular</span>
                     <span className="text-slate-400 text-[11px]">
-                      Abre notas de texto diretamente do WhatsApp/Downloads e salva seus arquivos com segurança.
+                      Abre notas diretamente do WhatsApp, Downloads e gerenciadores de arquivos locais.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Salvar .txt */}
+                <div
+                  className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs ${
+                    isDark
+                      ? 'bg-slate-800/60 border-slate-700/60 text-slate-300'
+                      : 'bg-slate-50 border-slate-200 text-slate-700'
+                  }`}
+                >
+                  <div className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400 shrink-0 mt-0.5">
+                    <Save className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="font-semibold block text-slate-100">Salvar e Exportar Arquivos .txt</span>
+                    <span className="text-slate-400 text-[11px]">
+                      Garante que suas notas sejam salvas e exportadas com total segurança e integridade.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Ditado por Voz */}
+                <div
+                  className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs ${
+                    isDark
+                      ? 'bg-slate-800/60 border-slate-700/60 text-slate-300'
+                      : 'bg-slate-50 border-slate-200 text-slate-700'
+                  }`}
+                >
+                  <div className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400 shrink-0 mt-0.5">
+                    <Mic className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="font-semibold block text-slate-100">Ditado por Voz com Reconhecimento</span>
+                    <span className="text-slate-400 text-[11px]">
+                      Permite falar e ditar anotações diretamente em português (pt-BR).
                     </span>
                   </div>
                 </div>
@@ -208,7 +226,7 @@ export const StoragePermissionModal: React.FC<StoragePermissionModalProps> = ({
                   <div>
                     <span className="font-semibold block text-slate-100">100% Privado e Seguro</span>
                     <span className="text-slate-400 text-[11px]">
-                      O microfone só é utilizado quando você clica para ditar. Seus dados não saem do aparelho.
+                      Seus arquivos e notas ficam gravados exclusivamente no seu aparelho.
                     </span>
                   </div>
                 </div>
@@ -223,7 +241,7 @@ export const StoragePermissionModal: React.FC<StoragePermissionModalProps> = ({
                 className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-semibold text-sm shadow-lg shadow-emerald-950/40 transition active:scale-[0.98]"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Permitir Acesso ao Microfone e Memória</span>
+                <span>Permitir Acesso ao Armazenamento</span>
               </button>
 
               <button
