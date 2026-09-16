@@ -26,6 +26,7 @@ import { VoiceTypingModal } from './components/VoiceTypingModal';
 import { GeminiSearchModal } from './components/GeminiSearchModal';
 import { ImageModal } from './components/ImageModal';
 import { GeminiVoiceReaderModal } from './components/GeminiVoiceReaderModal';
+import { StoragePermissionModal } from './components/StoragePermissionModal';
 
 export default function App() {
   // State from storage
@@ -43,6 +44,7 @@ export default function App() {
   const [isGeminiOpen, setIsGeminiOpen] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isVoiceReaderOpen, setIsVoiceReaderOpen] = useState(false);
+  const [isStoragePermissionOpen, setIsStoragePermissionOpen] = useState(false);
 
   // Active highlight color (defaults to yellow #fef08a)
   const [activeHighlightColor, setActiveHighlightColor] = useState<string>(
@@ -87,6 +89,15 @@ export default function App() {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
+    }
+
+    // v4.2: Ao abrir o app pela primeira vez, pedir permissão para acessar o microfone e armazenamento do aparelho
+    const hasPromptedPermissions = localStorage.getItem('onotepad_microphone_permission_v4_2');
+    if (!hasPromptedPermissions) {
+      const timer = setTimeout(() => {
+        setIsStoragePermissionOpen(true);
+      }, 700);
+      return () => clearTimeout(timer);
     }
   }, []);
 
@@ -693,6 +704,7 @@ export default function App() {
         onOpenGeminiSearch={() => setIsGeminiOpen(true)}
         onOpenImageModal={() => setIsImageModalOpen(true)}
         onOpenVoiceReader={() => setIsVoiceReaderOpen(true)}
+        onOpenStoragePermission={() => setIsStoragePermissionOpen(true)}
       />
 
       {/* Rename Tab Modal Dialog */}
@@ -754,6 +766,14 @@ export default function App() {
         noteTitle={activeNote.title}
         noteContent={activeNote.content}
         theme={settings.theme}
+      />
+
+      {/* Device Permissions Request Modal (Microphone & Storage - v4.2) */}
+      <StoragePermissionModal
+        isOpen={isStoragePermissionOpen}
+        onClose={() => setIsStoragePermissionOpen(false)}
+        theme={settings.theme}
+        onPermissionGranted={() => addToast('Permissões do microfone e memória ativadas!', 'success')}
       />
 
       {/* Toast Notifications */}

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useRef } from 'react';
+import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import {
   Save,
   FolderOpen,
@@ -23,7 +23,9 @@ import {
   Highlighter,
   Palette,
   Check,
-  Volume2
+  Volume2,
+  ChevronDown,
+  HardDrive
 } from 'lucide-react';
 import { AppSettings, NoteTab, HIGHLIGHT_COLORS, FONT_COLORS } from '../types';
 
@@ -35,7 +37,7 @@ interface HamburgerMenuProps {
   onSaveFile: () => void;
   onOpenFile: () => void;
   onFormat: (type: 'bold' | 'italic' | 'underline') => void;
-  onHighlight: (color: string) => void;
+  onHighlight: (color?: string) => void;
   onSetFontColor: (color: string) => void;
   onColorSelection: (color: string) => void;
   onToggleBarPosition: () => void;
@@ -48,6 +50,7 @@ interface HamburgerMenuProps {
   onOpenGeminiSearch: () => void;
   onOpenImageModal: () => void;
   onOpenVoiceReader: () => void;
+  onOpenStoragePermission?: () => void;
 }
 
 export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
@@ -71,6 +74,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
   onOpenGeminiSearch,
   onOpenImageModal,
   onOpenVoiceReader,
+  onOpenStoragePermission,
 }) => {
   // Local state for color selectors in menu
   const [selectedHighlightColor, setSelectedHighlightColor] = useState<string>(
@@ -79,6 +83,35 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
   const [selectedFontColor, setSelectedFontColor] = useState<string>(
     activeNote.fontColor || settings.fontColor || ''
   );
+
+  const dragControls = useDragControls();
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const touchStartY = useRef<number | null>(null);
+  const touchStartX = useRef<number | null>(null);
+
+  // Swipe-down touch detection on drawer content
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (drawerRef.current && drawerRef.current.scrollTop <= 8) {
+      touchStartY.current = e.touches[0].clientY;
+      touchStartX.current = e.touches[0].clientX;
+    } else {
+      touchStartY.current = null;
+      touchStartX.current = null;
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartY.current !== null && drawerRef.current && drawerRef.current.scrollTop <= 8) {
+      const deltaY = e.changedTouches[0].clientY - touchStartY.current;
+      const deltaX = Math.abs(e.changedTouches[0].clientX - (touchStartX.current || 0));
+      // If pulled down by at least 60px and mostly vertical movement
+      if (deltaY > 60 && deltaY > deltaX * 1.2) {
+        onClose();
+      }
+    }
+    touchStartY.current = null;
+    touchStartX.current = null;
+  };
 
   return (
     <AnimatePresence>
@@ -94,29 +127,57 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
             className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs"
           />
 
-          {/* Android Bottom Sheet / Drawer Modal */}
+          {/* Android Bottom Sheet / Drawer Modal with Drag & Swipe Down to Close */}
           <motion.div
+            ref={drawerRef}
             id="hamburger-menu-drawer"
             initial={{ y: '100%', opacity: 0.8 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: '100%', opacity: 0.8 }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            drag="y"
+            dragControls={dragControls}
+            dragListener={false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.7 }}
+            onDragEnd={(_e, info) => {
+              if (info.offset.y > 80 || info.velocity.y > 300) {
+                onClose();
+              }
+            }}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
             className="fixed inset-x-0 bottom-0 z-50 max-h-[92vh] overflow-y-auto rounded-t-3xl border-t border-slate-700/50 bg-slate-900 text-slate-100 shadow-2xl p-4 sm:p-6 sm:max-w-lg sm:mx-auto"
           >
-            {/* Handle Drag Bar */}
-            <div className="flex justify-center mb-2">
-              <div className="w-12 h-1.5 rounded-full bg-slate-600/80" />
+            {/* Handle Drag Bar - Pull down to close */}
+            <div
+              onPointerDown={(e) => dragControls.start(e)}
+              className="flex flex-col items-center justify-center pt-0 pb-2.5 -mt-1 cursor-grab active:cursor-grabbing touch-none select-none group"
+              title="Deslize para baixo para fechar"
+              aria-label="Deslize para baixo para fechar"
+            >
+              <div className="w-12 h-1.5 rounded-full bg-slate-600 group-hover:bg-emerald-400 group-active:bg-emerald-400 transition-colors" />
+              <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-400 group-hover:text-slate-300 font-medium transition-colors">
+                <ChevronDown className="w-3 h-3 animate-bounce" />
+                <span>Deslize para baixo para fechar</span>
+              </div>
             </div>
 
             {/* Header */}
-            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800">
+            <div
+              onPointerDown={(e) => {
+                if ((e.target as HTMLElement).closest('button, input, select, a')) return;
+                dragControls.start(e);
+              }}
+              className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800 touch-none select-none cursor-grab"
+            >
               <div className="flex items-center gap-2">
                 <Smartphone className="w-5 h-5 text-emerald-400" />
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="font-bold text-base text-slate-100">Menu de Opções</h3>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      v4.0
+                      v4.2
                     </span>
                   </div>
                   <p className="text-xs text-slate-400">
@@ -153,11 +214,11 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
 
             {/* Grid of Main Actions */}
             <div className="space-y-4">
-              {/* Novidades v4.0: Leitor de Voz Gemini, Voz, Pesquisa & Imagem */}
+              {/* Novidades v4.2: Leitor de Voz Gemini, Voz, Pesquisa & Armazenamento */}
               <div>
                 <span className="text-[11px] font-semibold tracking-wider text-emerald-400 uppercase px-1 flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5" />
-                  Recursos Inteligentes (v4.0)
+                  Recursos Inteligentes (v4.2)
                 </span>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1.5">
                   {/* Ler com Gemini (Áudio / Voz) */}
@@ -497,6 +558,35 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                       {settings.theme === 'dark' ? 'Tema Escuro' : 'Tema Claro'}
                     </span>
                   </button>
+
+                  {/* Permissões do Aparelho: Microfone e Armazenamento (v4.2) */}
+                  {onOpenStoragePermission && (
+                    <button
+                      id="menu-storage-permission-button"
+                      onClick={() => {
+                        onClose();
+                        onOpenStoragePermission();
+                      }}
+                      className="w-full flex items-center justify-between p-3 rounded-2xl bg-slate-800/90 hover:bg-slate-700/90 active:scale-99 transition border border-slate-700/60"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="relative p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          <Mic className="w-4 h-4" />
+                        </div>
+                        <div className="text-left">
+                          <div className="font-semibold text-xs text-slate-100">
+                            Permissões do Aparelho
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            Microfone (ditado de voz) e armazenamento
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                        Microfone & Memória
+                      </span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -559,7 +649,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
 
             {/* Bottom info */}
             <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-              <span>Bloco de Notas Android • v4.0</span>
+              <span>Bloco de Notas Android • v4.2</span>
               <span className="flex items-center gap-1">
                 <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 Salvamento Automático Ativo

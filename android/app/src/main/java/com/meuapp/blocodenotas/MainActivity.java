@@ -1,11 +1,16 @@
 package com.meuapp.blocodenotas;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.OpenableColumns;
 import android.webkit.JavascriptInterface;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
 import org.json.JSONObject;
 import java.io.BufferedReader;
@@ -16,6 +21,9 @@ import java.util.UUID;
 
 public class MainActivity extends BridgeActivity {
 
+    private static final int STORAGE_PERMISSION_CODE = 2001;
+    private static final int MICROPHONE_PERMISSION_CODE = 2002;
+    private static final int ALL_PERMISSIONS_CODE = 2003;
     private String pendingFileJson = null;
     private String lastProcessedUriString = null;
     private long lastProcessedTimestamp = 0;
@@ -34,6 +42,59 @@ public class MainActivity extends BridgeActivity {
         handleIntent(intent);
     }
 
+    public boolean hasStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Build.VERSION.SDK_INT <= 32) {
+            return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+        }
+        return true;
+    }
+
+    public void requestStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Build.VERSION.SDK_INT <= 32) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{
+                    Manifest.permission.READ_EXTERNAL_STORAGE,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE
+                }, STORAGE_PERMISSION_CODE);
+            }
+        }
+    }
+
+    public boolean hasMicrophonePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            return ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+        }
+        return true;
+    }
+
+    public void requestMicrophonePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{
+                    Manifest.permission.RECORD_AUDIO
+                }, MICROPHONE_PERMISSION_CODE);
+            }
+        }
+    }
+
+    public void requestAllAppPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            java.util.List<String> needed = new java.util.ArrayList<>();
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                needed.add(Manifest.permission.RECORD_AUDIO);
+            }
+            if (Build.VERSION.SDK_INT <= 32) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                    needed.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+                    needed.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+                }
+            }
+            if (!needed.isEmpty()) {
+                ActivityCompat.requestPermissions(this, needed.toArray(new String[0]), ALL_PERMISSIONS_CODE);
+            }
+        }
+    }
+
     private void initFileBridge() {
         if (bridge != null && bridge.getWebView() != null) {
             bridge.getWebView().addJavascriptInterface(new Object() {
@@ -47,6 +108,37 @@ public class MainActivity extends BridgeActivity {
                 @JavascriptInterface
                 public void markFileHandled(String intentId) {
                     pendingFileJson = null;
+                }
+
+                @JavascriptInterface
+                public boolean hasStoragePermission() {
+                    return MainActivity.this.hasStoragePermission();
+                }
+
+                @JavascriptInterface
+                public void requestStoragePermission() {
+                    runOnUiThread(() -> {
+                        MainActivity.this.requestStoragePermission();
+                    });
+                }
+
+                @JavascriptInterface
+                public boolean hasMicrophonePermission() {
+                    return MainActivity.this.hasMicrophonePermission();
+                }
+
+                @JavascriptInterface
+                public void requestMicrophonePermission() {
+                    runOnUiThread(() -> {
+                        MainActivity.this.requestMicrophonePermission();
+                    });
+                }
+
+                @JavascriptInterface
+                public void requestAllAppPermissions() {
+                    runOnUiThread(() -> {
+                        MainActivity.this.requestAllAppPermissions();
+                    });
                 }
             }, "AndroidFileBridge");
         }
