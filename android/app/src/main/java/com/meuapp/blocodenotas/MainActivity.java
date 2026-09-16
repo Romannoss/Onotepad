@@ -12,10 +12,13 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 public class MainActivity extends BridgeActivity {
 
     private String pendingFileJson = null;
+    private String lastProcessedUriString = null;
+    private long lastProcessedTimestamp = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,6 +43,11 @@ public class MainActivity extends BridgeActivity {
                     pendingFileJson = null;
                     return data;
                 }
+
+                @JavascriptInterface
+                public void markFileHandled(String intentId) {
+                    pendingFileJson = null;
+                }
             }, "AndroidFileBridge");
         }
     }
@@ -54,6 +62,14 @@ public class MainActivity extends BridgeActivity {
                 uri = intent.getClipData().getItemAt(0).getUri();
             }
             if (uri != null) {
+                String uriStr = uri.toString();
+                long now = System.currentTimeMillis();
+                if (uriStr.equals(lastProcessedUriString) && (now - lastProcessedTimestamp) < 1500) {
+                    return;
+                }
+                lastProcessedUriString = uriStr;
+                lastProcessedTimestamp = now;
+
                 processFileUri(uri);
             }
         } else if (Intent.ACTION_SEND.equals(action)) {
@@ -61,6 +77,14 @@ public class MainActivity extends BridgeActivity {
                 try {
                     Uri uri = (Uri) intent.getParcelableExtra(Intent.EXTRA_STREAM);
                     if (uri != null) {
+                        String uriStr = uri.toString();
+                        long now = System.currentTimeMillis();
+                        if (uriStr.equals(lastProcessedUriString) && (now - lastProcessedTimestamp) < 1500) {
+                            return;
+                        }
+                        lastProcessedUriString = uriStr;
+                        lastProcessedTimestamp = now;
+
                         processFileUri(uri);
                     }
                 } catch (Exception e) {
@@ -87,7 +111,9 @@ public class MainActivity extends BridgeActivity {
 
     private void deliverFileData(String fileName, String content) {
         try {
+            String intentId = UUID.randomUUID().toString();
             JSONObject obj = new JSONObject();
+            obj.put("id", intentId);
             obj.put("fileName", fileName);
             obj.put("content", content);
             this.pendingFileJson = obj.toString();
@@ -96,7 +122,11 @@ public class MainActivity extends BridgeActivity {
                 bridge.getWebView().post(() -> {
                     String escapedFileName = JSONObject.quote(fileName);
                     String escapedContent = JSONObject.quote(content);
-                    String js = "if (window.__onAndroidFileOpen) { window.__onAndroidFileOpen(" + escapedFileName + ", " + escapedContent + "); }";
+                    String escapedId = JSONObject.quote(intentId);
+                    String js = "if (typeof window.__onAndroidFileOpen === 'function') { window.__onAndroidFileOpen(" 
+                        + escapedFileName + ", " 
+                        + escapedContent + ", " 
+                        + escapedId + "); }";
                     bridge.getWebView().evaluateJavascript(js, null);
                 });
             }

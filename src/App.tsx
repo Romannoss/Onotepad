@@ -277,25 +277,66 @@ export default function App() {
     }
   };
 
-  // Helper to open text content into active tab or new tab
-  const openTextContentAsTab = useCallback((fileName: string, rawContent: string) => {
+  const activeIdRef = useRef(activeId);
+  activeIdRef.current = activeId;
+  const nextTabNumberRef = useRef(nextTabNumber);
+  nextTabNumberRef.current = nextTabNumber;
+  const triggerAutoSaveRef = useRef(triggerAutoSave);
+  triggerAutoSaveRef.current = triggerAutoSave;
+
+  const lastOpenedFileRef = useRef<{ fileName: string; contentSnippet: string; timestamp: number } | null>(null);
+  const handledIntentIdsRef = useRef<Set<string>>(new Set());
+
+  // Helper to open text content into active tab or new tab with anti-duplication guards
+  const openTextContentAsTab = useCallback((fileName: string, rawContent: string, intentId?: string) => {
     try {
+      if (intentId) {
+        if (handledIntentIdsRef.current.has(intentId)) {
+          return;
+        }
+        handledIntentIdsRef.current.add(intentId);
+      }
+
+      // Previne abertura duplicada do mesmo arquivo em menos de 3 segundos
+      const contentSnippet = (rawContent || '').slice(0, 300);
+      const now = Date.now();
+      if (
+        lastOpenedFileRef.current &&
+        lastOpenedFileRef.current.fileName === fileName &&
+        lastOpenedFileRef.current.contentSnippet === contentSnippet &&
+        now - lastOpenedFileRef.current.timestamp < 3000
+      ) {
+        return;
+      }
+      lastOpenedFileRef.current = { fileName, contentSnippet, timestamp: now };
+
+      // Informa o bridge nativo que o arquivo foi processado
+      const androidBridge = (window as unknown as { AndroidFileBridge?: { markFileHandled?: (id?: string) => void } }).AndroidFileBridge;
+      if (androidBridge && typeof androidBridge.markFileHandled === 'function') {
+        try {
+          androidBridge.markFileHandled(intentId);
+        } catch (e) {
+          // ignore
+        }
+      }
+
       const cleanName = fileName.replace(/\.[^/.]+$/, '').trim() || 'nota';
       const htmlContent = textToEditorHtml(rawContent);
 
       setNotes((prevNotes) => {
-        const curActive = prevNotes.find((n) => n.id === activeId);
+        const curActiveId = activeIdRef.current;
+        const curActive = prevNotes.find((n) => n.id === curActiveId);
         if (
           curActive &&
           (!curActive.content || curActive.content.trim().length === 0 || curActive.content === '<p><br></p>') &&
           curActive.title.startsWith('nota ')
         ) {
           const updatedNotes = prevNotes.map((n) =>
-            n.id === activeId
+            n.id === curActiveId
               ? { ...n, title: cleanName, content: htmlContent, updatedAt: Date.now(), fileName }
               : n
           );
-          triggerAutoSave(updatedNotes, activeId, nextTabNumber);
+          triggerAutoSaveRef.current(updatedNotes, curActiveId, nextTabNumberRef.current);
           addToast(`Arquivo "${fileName}" aberto nesta aba!`, 'success');
           return updatedNotes;
         } else {
@@ -315,7 +356,7 @@ export default function App() {
           const newCounter = getNextTabNumber(updatedNotes);
           setActiveId(newNote.id);
           setNextTabNumber(newCounter);
-          triggerAutoSave(updatedNotes, newNote.id, newCounter);
+          triggerAutoSaveRef.current(updatedNotes, newNote.id, newCounter);
           addToast(`Arquivo "${fileName}" aberto em nova aba!`, 'success');
           return updatedNotes;
         }
@@ -324,11 +365,20 @@ export default function App() {
       console.error('Failed to open external text file:', err);
       addToast('Erro ao abrir o arquivo de texto.', 'error');
     }
-  }, [activeId, nextTabNumber, triggerAutoSave]);
+  }, [addToast]);
 
   // Listener for Android "Abrir com" (Open with) and "Compartilhar com" (Share)
   useEffect(() => {
-    // 1. Check if an intent opened the app from closed state (cold start)
+    // 1. Global listener for when the app is already in memory or evaluateJavascript fires
+    (window as unknown as { __onAndroidFileOpen?: (fileName: string, content: string, intentId?: string) => void }).__onAndroidFileOpen = (
+      fileName: string,
+      content: string,
+      intentId?: string
+    ) => {
+      openTextContentAsTab(fileName || 'nota.txt', content || '', intentId);
+    };
+
+    // 2. Check if an intent opened the app from closed state (cold start)
     const androidBridge = (window as unknown as { AndroidFileBridge?: { getPendingFile?: () => string | null } }).AndroidFileBridge;
     if (androidBridge && typeof androidBridge.getPendingFile === 'function') {
       try {
@@ -336,21 +386,13 @@ export default function App() {
         if (pending) {
           const parsed = JSON.parse(pending);
           if (parsed && typeof parsed.content === 'string') {
-            openTextContentAsTab(parsed.fileName || 'nota.txt', parsed.content);
+            openTextContentAsTab(parsed.fileName || 'nota.txt', parsed.content, parsed.id);
           }
         }
       } catch (e) {
         console.error('Error reading pending file from AndroidFileBridge:', e);
       }
     }
-
-    // 2. Global listener for when the app is already in memory (warm start via onNewIntent)
-    (window as unknown as { __onAndroidFileOpen?: (fileName: string, content: string) => void }).__onAndroidFileOpen = (
-      fileName: string,
-      content: string
-    ) => {
-      openTextContentAsTab(fileName || 'nota.txt', content || '');
-    };
 
     return () => {
       delete (window as unknown as { __onAndroidFileOpen?: unknown }).__onAndroidFileOpen;
