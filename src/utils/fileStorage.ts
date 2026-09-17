@@ -246,19 +246,48 @@ export async function saveTextFileToDevice(note: NoteTab): Promise<{ success: bo
 }
 
 /**
- * Reads a .txt file selected by the user
+ * Reads a .txt file selected by the user (supports local files, Google Drive, OneDrive, etc.)
  */
-export function readTextFile(file: File): Promise<{ content: string; name: string }> {
+export async function readTextFile(file: File): Promise<{ content: string; name: string }> {
+  const cleanName = (file.name || 'nota.txt').replace(/\.txt$/i, '');
+
+  // 1. Try modern Blob.text() API first
+  if (typeof file.text === 'function') {
+    try {
+      const text = await file.text();
+      return { content: text || '', name: cleanName };
+    } catch (e) {
+      console.warn('file.text() failed, falling back to FileReader:', e);
+    }
+  }
+
+  // 2. Fallback to FileReader with UTF-8 and ISO-8859-1 fallback
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target?.result as string;
       resolve({
         content: text || '',
-        name: file.name.replace(/\.txt$/i, ''),
+        name: cleanName,
       });
     };
-    reader.onerror = (err) => reject(err);
+    reader.onerror = () => {
+      // Try secondary read with ISO-8859-1
+      try {
+        const fallbackReader = new FileReader();
+        fallbackReader.onload = (fe) => {
+          const fallbackText = fe.target?.result as string;
+          resolve({
+            content: fallbackText || '',
+            name: cleanName,
+          });
+        };
+        fallbackReader.onerror = (err) => reject(err);
+        fallbackReader.readAsText(file, 'ISO-8859-1');
+      } catch (err) {
+        reject(err);
+      }
+    };
     reader.readAsText(file, 'UTF-8');
   });
 }

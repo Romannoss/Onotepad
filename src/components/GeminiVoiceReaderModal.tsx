@@ -229,7 +229,7 @@ export const GeminiVoiceReaderModal: React.FC<GeminiVoiceReaderModalProps> = ({
                 <div className="flex items-center gap-2">
                   <h3 className="font-bold text-base tracking-tight">Leitor de Voz Gemini</h3>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                    v4.3
+                    v4.5
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 truncate max-w-[200px]">

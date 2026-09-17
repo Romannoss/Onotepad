@@ -14,8 +14,11 @@ import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
 import org.json.JSONObject;
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharsetDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
@@ -24,6 +27,7 @@ public class MainActivity extends BridgeActivity {
     private static final int STORAGE_PERMISSION_CODE = 2001;
     private static final int MICROPHONE_PERMISSION_CODE = 2002;
     private static final int ALL_PERMISSIONS_CODE = 2003;
+    private static final int REQUEST_OPEN_FILE_CODE = 4501;
     private String pendingFileJson = null;
     private String lastProcessedUriString = null;
     private long lastProcessedTimestamp = 0;
@@ -140,7 +144,58 @@ public class MainActivity extends BridgeActivity {
                         MainActivity.this.requestAllAppPermissions();
                     });
                 }
+
+                @JavascriptInterface
+                public void openFilePicker() {
+                    runOnUiThread(() -> {
+                        MainActivity.this.launchOpenFilePicker();
+                    });
+                }
             }, "AndroidFileBridge");
+        }
+    }
+
+    public void launchOpenFilePicker() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        String[] mimeTypes = new String[]{
+            "text/plain",
+            "text/*",
+            "application/octet-stream",
+            "application/x-empty"
+        };
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        try {
+            startActivityForResult(intent, REQUEST_OPEN_FILE_CODE);
+        } catch (Exception e) {
+            try {
+                Intent fallback = new Intent(Intent.ACTION_GET_CONTENT);
+                fallback.addCategory(Intent.CATEGORY_OPENABLE);
+                fallback.setType("*/*");
+                fallback.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+                startActivityForResult(Intent.createChooser(fallback, "Abrir nota (.txt)"), REQUEST_OPEN_FILE_CODE);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_OPEN_FILE_CODE && resultCode == RESULT_OK && data != null) {
+            Uri uri = data.getData();
+            if (uri == null && data.getClipData() != null && data.getClipData().getItemCount() > 0) {
+                uri = data.getClipData().getItemAt(0).getUri();
+            }
+            if (uri != null) {
+                try {
+                    getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } catch (Exception ignored) {}
+                processFileUri(uri);
+            }
         }
     }
 
@@ -252,26 +307,23 @@ public class MainActivity extends BridgeActivity {
 
     private String readFileContent(Uri uri) {
         try (InputStream is = getContentResolver().openInputStream(uri);
-             BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                sb.append(line).append("\n");
+             ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            if (is == null) return null;
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = is.read(buffer)) != -1) {
+                baos.write(buffer, 0, read);
             }
-            return sb.toString();
+            byte[] bytes = baos.toByteArray();
+            try {
+                CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder();
+                return decoder.decode(ByteBuffer.wrap(bytes)).toString();
+            } catch (Exception e) {
+                return new String(bytes, StandardCharsets.ISO_8859_1);
+            }
         } catch (Exception e) {
-            try (InputStream is = getContentResolver().openInputStream(uri);
-                 BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.ISO_8859_1))) {
-                StringBuilder sb = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    sb.append(line).append("\n");
-                }
-                return sb.toString();
-            } catch (Exception ex) {
-                ex.printStackTrace();
-                return null;
-            }
+            e.printStackTrace();
+            return null;
         }
     }
 }

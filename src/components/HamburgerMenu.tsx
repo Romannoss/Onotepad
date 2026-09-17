@@ -496,7 +496,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                         Abrir .txt
                       </div>
                       <div className="text-[10px] text-sky-400/80 leading-tight">
-                        Do aparelho
+                        Aparelho ou Drive
                       </div>
                     </div>
                   </button>
@@ -575,15 +575,15 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                         </div>
                         <div className="text-left">
                           <div className="font-semibold text-xs text-slate-100">
-                            Armazenamento do Aparelho
+                            Permissões do Aparelho
                           </div>
                           <div className="text-[10px] text-slate-400">
-                            Acesso a arquivos .txt, memória e microfone
+                            Armazenamento (Drive/Memória) & Microfone
                           </div>
                         </div>
                       </div>
                       <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                        Armazenamento
+                        v4.5
                       </span>
                     </button>
                   )}
@@ -649,7 +649,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
 
             {/* Bottom info */}
             <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-              <span>Bloco de Notas Android • v4.3</span>
+              <span>Bloco de Notas Android • v4.5</span>
               <span className="flex items-center gap-1">
                 <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 Salvamento Automático Ativo

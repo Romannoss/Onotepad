@@ -91,9 +91,9 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
 
-    // v4.3: Ao abrir o app pela primeira vez, pedir permissão para acessar o armazenamento do aparelho
-    const hasPromptedStorage = localStorage.getItem('onotepad_storage_permission_v4_3');
-    if (!hasPromptedStorage) {
+    // v4.5: Ao abrir o app pela primeira vez, pedir duas permissões: armazenamento e microfone
+    const hasPromptedPermissions = localStorage.getItem('onotepad_permissions_v4_5');
+    if (!hasPromptedPermissions) {
       const timer = setTimeout(() => {
         setIsStoragePermissionOpen(true);
       }, 700);
@@ -284,8 +284,25 @@ export default function App() {
     }
   };
 
-  // Open .txt file picker
+  // Open .txt file picker (native Android SAF for Google Drive/local files or HTML fallback)
   const handleOpenFileClick = () => {
+    const androidBridge = (
+      window as unknown as {
+        AndroidFileBridge?: {
+          openFilePicker?: () => void;
+        };
+      }
+    ).AndroidFileBridge;
+
+    if (androidBridge && typeof androidBridge.openFilePicker === 'function') {
+      try {
+        androidBridge.openFilePicker();
+        return;
+      } catch (err) {
+        console.warn('Native openFilePicker failed, falling back to input:', err);
+      }
+    }
+
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
       fileInputRef.current.click();
@@ -642,7 +659,7 @@ export default function App() {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".txt,text/plain"
+        accept=".txt,text/plain,text/*,application/octet-stream,.md,text/markdown"
         onChange={handleFileInputChange}
         className="hidden"
         id="file-input-txt"
@@ -768,12 +785,12 @@ export default function App() {
         theme={settings.theme}
       />
 
-      {/* Storage Permission Request Modal (v4.3) */}
+      {/* Dual Permission Request Modal: Armazenamento e Microfone (v4.5) */}
       <StoragePermissionModal
         isOpen={isStoragePermissionOpen}
         onClose={() => setIsStoragePermissionOpen(false)}
         theme={settings.theme}
-        onPermissionGranted={() => addToast('Permissão de armazenamento confirmada!', 'success')}
+        onPermissionGranted={() => addToast('Permissões de armazenamento e microfone configuradas!', 'success')}
       />
 
       {/* Toast Notifications */}

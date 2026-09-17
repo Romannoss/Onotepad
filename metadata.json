@@ -1,6 +1,6 @@
 {
   "name": "Onotepad",
-  "description": "Aplicativo de bloco de notas em abas para Android v4.3 com solicitação de permissão para acessar o armazenamento do aparelho ao abrir pela primeira vez, fechar menu por deslizamento para baixo, leitura e escrita por voz com Gemini, atalhos Ctrl+W e Ctrl+T, editor WYSIWYG e pesquisa com IA.",
+  "description": "Aplicativo de bloco de notas em abas para Android v4.5 com solicitação dupla de permissões para armazenamento e microfone ao abrir pela primeira vez, suporte completo para abrir arquivos .txt do Google Drive e nuvem, leitura e escrita por voz com Gemini, abas ilimitadas e editor WYSIWYG.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

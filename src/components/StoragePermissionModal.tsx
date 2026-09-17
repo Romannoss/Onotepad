@@ -29,9 +29,10 @@ export const StoragePermissionModal: React.FC<StoragePermissionModalProps> = ({
 
   const handleGrantPermission = async () => {
     try {
-      // 1. Mark in localStorage for v4.3 so it does not ask again on next app launches
-      localStorage.setItem('onotepad_storage_permission_v4_3', 'granted');
-      localStorage.setItem('onotepad_microphone_permission_v4_3', 'granted');
+      // 1. Mark in localStorage for v4.5 so it does not ask again on next app launches
+      localStorage.setItem('onotepad_permissions_v4_5', 'granted');
+      localStorage.setItem('onotepad_storage_permission_v4_5', 'granted');
+      localStorage.setItem('onotepad_microphone_permission_v4_5', 'granted');
 
       // 2. Trigger native Android OS storage & microphone permissions dialog via bridge
       const androidBridge = (
@@ -80,8 +81,9 @@ export const StoragePermissionModal: React.FC<StoragePermissionModalProps> = ({
 
   const handleDismiss = () => {
     try {
-      localStorage.setItem('onotepad_storage_permission_v4_3', 'dismissed');
-      localStorage.setItem('onotepad_microphone_permission_v4_3', 'dismissed');
+      localStorage.setItem('onotepad_permissions_v4_5', 'dismissed');
+      localStorage.setItem('onotepad_storage_permission_v4_5', 'dismissed');
+      localStorage.setItem('onotepad_microphone_permission_v4_5', 'dismissed');
     } catch (e) {
       console.warn('Permission dismiss:', e);
     }
@@ -128,12 +130,12 @@ export const StoragePermissionModal: React.FC<StoragePermissionModalProps> = ({
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-bold tracking-tight">Permissão de Armazenamento</h2>
+                    <h2 className="text-lg font-bold tracking-tight">Permissões do Aparelho</h2>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      v4.3
+                      v4.5
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400">Armazenamento do Aparelho & Microfone</p>
+                  <p className="text-xs text-slate-400">1. Armazenamento • 2. Microfone</p>
                 </div>
               </div>
 
@@ -150,98 +152,82 @@ export const StoragePermissionModal: React.FC<StoragePermissionModalProps> = ({
             {/* Body Explanation */}
             <div className="mt-4 space-y-3">
               <p className={`text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                Para que o <strong className="text-emerald-400">Onotepad</strong> possa acessar a memória do celular para abrir, editar, salvar e exportar suas notas e arquivos <code className="px-1.5 py-0.5 rounded text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">.txt</code>, solicitamos a permissão de armazenamento do aparelho.
+                Para a melhor experiência no <strong className="text-emerald-400">Onotepad</strong>, solicitamos duas permissões no seu aparelho:
               </p>
 
-              {/* Feature Points */}
-              <div className="space-y-2 pt-1">
-                {/* Armazenamento Principal Feature */}
+              {/* Feature Points - Two main permissions */}
+              <div className="space-y-2.5 pt-1">
+                {/* 1. Permissão de Armazenamento & Google Drive */}
                 <div
-                  className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs ${
+                  className={`flex items-start gap-3 p-3 rounded-2xl border text-xs ${
                     isDark
-                      ? 'bg-slate-800/60 border-slate-700/60 text-slate-300'
+                      ? 'bg-slate-800/80 border-slate-700/80 text-slate-300'
                       : 'bg-slate-50 border-slate-200 text-slate-700'
                   }`}
                 >
-                  <div className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400 shrink-0 mt-0.5">
-                    <HardDrive className="w-3.5 h-3.5" />
+                  <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 shrink-0 mt-0.5 border border-emerald-500/30">
+                    <HardDrive className="w-4 h-4" />
                   </div>
-                  <div>
-                    <span className="font-semibold block text-slate-100">Armazenamento Interno do Celular</span>
-                    <span className="text-slate-400 text-[11px]">
-                      Abre notas diretamente do WhatsApp, Downloads e gerenciadores de arquivos locais.
-                    </span>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-slate-100 text-xs">1. Armazenamento & Arquivos</span>
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">Drive & Memória</span>
+                    </div>
+                    <p className="text-slate-400 text-[11px] leading-relaxed">
+                      Abre e edita notas salvas no celular, Google Drive, WhatsApp ou Downloads, e salva seus arquivos <code className="px-1 py-0.2 rounded text-[10px] bg-emerald-500/10 text-emerald-400">.txt</code> com segurança.
+                    </p>
                   </div>
                 </div>
 
-                {/* Salvar .txt */}
+                {/* 2. Permissão de Microfone */}
                 <div
-                  className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs ${
+                  className={`flex items-start gap-3 p-3 rounded-2xl border text-xs ${
                     isDark
-                      ? 'bg-slate-800/60 border-slate-700/60 text-slate-300'
+                      ? 'bg-slate-800/80 border-slate-700/80 text-slate-300'
                       : 'bg-slate-50 border-slate-200 text-slate-700'
                   }`}
                 >
-                  <div className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400 shrink-0 mt-0.5">
-                    <Save className="w-3.5 h-3.5" />
+                  <div className="p-2 rounded-xl bg-rose-500/20 text-rose-400 shrink-0 mt-0.5 border border-rose-500/30">
+                    <Mic className="w-4 h-4" />
                   </div>
-                  <div>
-                    <span className="font-semibold block text-slate-100">Salvar e Exportar Arquivos .txt</span>
-                    <span className="text-slate-400 text-[11px]">
-                      Garante que suas notas sejam salvas e exportadas com total segurança e integridade.
-                    </span>
-                  </div>
-                </div>
-
-                {/* Ditado por Voz */}
-                <div
-                  className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs ${
-                    isDark
-                      ? 'bg-slate-800/60 border-slate-700/60 text-slate-300'
-                      : 'bg-slate-50 border-slate-200 text-slate-700'
-                  }`}
-                >
-                  <div className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400 shrink-0 mt-0.5">
-                    <Mic className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <span className="font-semibold block text-slate-100">Ditado por Voz com Reconhecimento</span>
-                    <span className="text-slate-400 text-[11px]">
-                      Permite falar e ditar anotações diretamente em português (pt-BR).
-                    </span>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-slate-100 text-xs">2. Microfone (Ditado por Voz)</span>
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-400 font-semibold border border-rose-500/20">Fala em pt-BR</span>
+                    </div>
+                    <p className="text-slate-400 text-[11px] leading-relaxed">
+                      Permite ditar anotações diretamente pela fala com reconhecimento de voz automático em português e leitura das notas.
+                    </p>
                   </div>
                 </div>
 
                 {/* Privacidade */}
                 <div
-                  className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs ${
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-xs ${
                     isDark
-                      ? 'bg-slate-800/60 border-slate-700/60 text-slate-300'
+                      ? 'bg-slate-800/40 border-slate-700/40 text-slate-300'
                       : 'bg-slate-50 border-slate-200 text-slate-700'
                   }`}
                 >
-                  <div className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400 shrink-0 mt-0.5">
+                  <div className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400 shrink-0">
                     <ShieldCheck className="w-3.5 h-3.5" />
                   </div>
-                  <div>
-                    <span className="font-semibold block text-slate-100">100% Privado e Seguro</span>
-                    <span className="text-slate-400 text-[11px]">
-                      Seus arquivos e notas ficam gravados exclusivamente no seu aparelho.
-                    </span>
-                  </div>
+                  <span className="text-slate-400 text-[11px]">
+                    <strong className="text-slate-200">100% Privado:</strong> Suas notas ficam salvas exclusivamente no seu aparelho.
+                  </span>
                 </div>
               </div>
             </div>
 
             {/* Actions */}
-            <div className="mt-6 flex flex-col gap-2">
+            <div className="mt-5 flex flex-col gap-2">
               <button
                 id="btn-grant-storage-permission"
                 onClick={handleGrantPermission}
                 className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-semibold text-sm shadow-lg shadow-emerald-950/40 transition active:scale-[0.98]"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Permitir Acesso ao Armazenamento</span>
+                <span>Permitir Armazenamento e Microfone</span>
               </button>
 
               <button
