@@ -20,7 +20,10 @@ import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.UUID;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 
 public class MainActivity extends BridgeActivity {
 
@@ -31,12 +34,75 @@ public class MainActivity extends BridgeActivity {
     private String pendingFileJson = null;
     private String lastProcessedUriString = null;
     private long lastProcessedTimestamp = 0;
+    private TextToSpeech tts = null;
+    private boolean isTtsReady = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        initTextToSpeech();
         initFileBridge();
         handleIntent(getIntent());
+    }
+
+    private void initTextToSpeech() {
+        try {
+            tts = new TextToSpeech(this, status -> {
+                if (status == TextToSpeech.SUCCESS) {
+                    try {
+                        int res = tts.setLanguage(new Locale("pt", "BR"));
+                        if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
+                            tts.setLanguage(Locale.getDefault());
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    isTtsReady = true;
+
+                    tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                        @Override
+                        public void onStart(String utteranceId) {
+                            runOnUiThread(() -> {
+                                if (bridge != null && bridge.getWebView() != null) {
+                                    bridge.getWebView().evaluateJavascript("if (typeof window.__onNativeSpeechStart === 'function') window.__onNativeSpeechStart();", null);
+                                }
+                            });
+                        }
+
+                        @Override
+                        public void onDone(String utteranceId) {
+                            runOnUiThread(() -> {
+                                if (bridge != null && bridge.getWebView() != null) {
+                                    bridge.getWebView().evaluateJavascript("if (typeof window.__onNativeSpeechEnd === 'function') window.__onNativeSpeechEnd();", null);
+                                }
+                            });
+                        }
+
+                        @Override
+                        public void onError(String utteranceId) {
+                            runOnUiThread(() -> {
+                                if (bridge != null && bridge.getWebView() != null) {
+                                    bridge.getWebView().evaluateJavascript("if (typeof window.__onNativeSpeechEnd === 'function') window.__onNativeSpeechEnd();", null);
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        if (tts != null) {
+            try {
+                tts.stop();
+                tts.shutdown();
+            } catch (Exception ignored) {}
+        }
+        super.onDestroy();
     }
 
     @Override
@@ -150,6 +216,41 @@ public class MainActivity extends BridgeActivity {
                     runOnUiThread(() -> {
                         MainActivity.this.launchOpenFilePicker();
                     });
+                }
+
+                @JavascriptInterface
+                public boolean isNativeTtsAvailable() {
+                    return isTtsReady && tts != null;
+                }
+
+                @JavascriptInterface
+                public void speakText(String text, float rate) {
+                    if (tts != null && isTtsReady && text != null && !text.trim().isEmpty()) {
+                        runOnUiThread(() -> {
+                            try {
+                                tts.stop();
+                                tts.setSpeechRate(rate > 0 ? rate : 1.0f);
+                                Bundle params = new Bundle();
+                                params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "NOTE_VOICE_" + System.currentTimeMillis());
+                                tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, "NOTE_VOICE");
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        });
+                    }
+                }
+
+                @JavascriptInterface
+                public void stopSpeech() {
+                    if (tts != null) {
+                        runOnUiThread(() -> {
+                            try {
+                                tts.stop();
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        });
+                    }
                 }
             }, "AndroidFileBridge");
         }

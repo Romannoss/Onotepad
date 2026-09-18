@@ -81,6 +81,48 @@ app.post("/api/gemini/search", async (req: Request, res: Response): Promise<void
   }
 });
 
+// Endpoint para preparar o conteúdo da nota para locução e leitura em voz alta com IA Gemini
+app.post("/api/gemini/read-note", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { content, mode = "read" } = req.body;
+    if (!content || typeof content !== "string" || !content.trim()) {
+      res.status(400).json({ error: "O conteúdo da nota está vazio para leitura." });
+      return;
+    }
+
+    const ai = getGeminiClient();
+    let prompt = "";
+    let systemInstruction = "";
+
+    if (mode === "summary") {
+      systemInstruction =
+        "Você é o leitor de voz do Bloco de Notas Android. Seu papel é resumir em voz alta em português brasileiro os pontos mais importantes da nota para quem está ouvindo. Seja direto, fale como um locutor amigável, sem metatexto, sem introduções como 'Aqui está o resumo'. Vá direto ao que deve ser falado.";
+      prompt = `Crie um resumo falado de 2 a 4 frases claras e naturais para ser ouvido em áudio desta nota:\n\n${content.slice(0, 10000)}`;
+    } else {
+      systemInstruction =
+        "Você é o locutor narrador oficial do Bloco de Notas Android. Seu papel é ler e vocalizar o texto da nota com perfeita dicção em português brasileiro. Adapte o texto para a fala: retire códigos de formatação, URLs brutas, asteriscos ou marcadores técnicos que soem estranhos quando ouvidos em áudio, preservando absolutamente todo o sentido e a integridade da nota. NUNCA faça comentários, cumprimentos ou introduções. Entregue unicamente o texto que a voz deve falar.";
+      prompt = `Leia e vocalize em formato de locução fluida o conteúdo da seguinte nota:\n\n${content.slice(0, 10000)}`;
+    }
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.8-flash",
+      contents: prompt,
+      config: {
+        systemInstruction,
+        temperature: 0.3,
+      },
+    });
+
+    const preparedText = response.text || content;
+    res.json({ preparedText, mode });
+  } catch (error: any) {
+    console.error("Erro na leitura Gemini:", error);
+    res.status(500).json({
+      error: error?.message || "Erro ao preparar locução com Gemini.",
+    });
+  }
+});
+
 async function startServer() {
   // Vite middleware in development
   if (process.env.NODE_ENV !== "production") {

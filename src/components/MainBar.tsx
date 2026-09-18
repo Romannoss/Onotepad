@@ -122,6 +122,7 @@ export const MainBar: React.FC<MainBarProps> = ({
           {/* Marcar Texto (Marca-Texto) com indicador de cor */}
           <button
             id="quick-btn-highlight"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={onHighlight}
             title={`Marcar / Desmarcar Texto (Marca-Texto ${activeHighlightColor})`}
             aria-label="Marcar ou Desmarcar Texto"
@@ -137,6 +138,7 @@ export const MainBar: React.FC<MainBarProps> = ({
           {/* Bold, Italic, Underline */}
           <button
             id="quick-btn-bold"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => onFormat('bold')}
             title="Negrito (**texto**)"
             className={`p-2 rounded-lg transition active:scale-90 ${
@@ -149,6 +151,7 @@ export const MainBar: React.FC<MainBarProps> = ({
           </button>
           <button
             id="quick-btn-italic"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => onFormat('italic')}
             title="Itálico (*texto*)"
             className={`p-2 rounded-lg transition active:scale-90 ${
@@ -161,6 +164,7 @@ export const MainBar: React.FC<MainBarProps> = ({
           </button>
           <button
             id="quick-btn-underline"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => onFormat('underline')}
             title="Sublinhado (<u>texto</u>)"
             className={`p-2 rounded-lg transition active:scale-90 ${

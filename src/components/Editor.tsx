@@ -48,23 +48,61 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
     // Save active text selection/range when user types, clicks or touches inside editor
     const saveSelection = useCallback(() => {
       const sel = window.getSelection();
-      if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0);
-        if (editorDivRef.current && editorDivRef.current.contains(range.commonAncestorContainer)) {
-          savedRangeRef.current = range.cloneRange();
-        }
+      if (sel && sel.rangeCount > 0 && editorDivRef.current) {
+        try {
+          const range = sel.getRangeAt(0);
+          if (editorDivRef.current.contains(range.commonAncestorContainer)) {
+            savedRangeRef.current = range.cloneRange();
+          }
+        } catch {}
       }
+    }, []);
+
+    // Listen to document selectionchange for Android mobile selection handles
+    useEffect(() => {
+      const handleDocSelection = () => {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && editorDivRef.current) {
+          try {
+            const range = sel.getRangeAt(0);
+            if (editorDivRef.current.contains(range.commonAncestorContainer)) {
+              savedRangeRef.current = range.cloneRange();
+            }
+          } catch {}
+        }
+      };
+      document.addEventListener('selectionchange', handleDocSelection);
+      return () => document.removeEventListener('selectionchange', handleDocSelection);
     }, []);
 
     // Restore text selection/range before executing formatting commands
     const restoreSelection = useCallback(() => {
-      if (savedRangeRef.current) {
-        const sel = window.getSelection();
-        if (sel) {
-          sel.removeAllRanges();
-          sel.addRange(savedRangeRef.current);
+      const sel = window.getSelection();
+      if (!sel) return null;
+
+      // If active selection is already inside editor and valid, use it
+      if (
+        sel.rangeCount > 0 &&
+        editorDivRef.current &&
+        editorDivRef.current.contains(sel.getRangeAt(0).commonAncestorContainer)
+      ) {
+        const currentRange = sel.getRangeAt(0);
+        if (!currentRange.collapsed || !savedRangeRef.current) {
+          return currentRange;
         }
       }
+
+      // Otherwise restore saved range
+      if (savedRangeRef.current && editorDivRef.current) {
+        try {
+          sel.removeAllRanges();
+          sel.addRange(savedRangeRef.current);
+          return savedRangeRef.current;
+        } catch (e) {
+          console.warn('Failed to restore range:', e);
+        }
+      }
+      return sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
     }, []);
 
     // Sync editor content with note prop when switching tabs or external update
@@ -129,20 +167,20 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
       },
 
       applyHighlight: (color: string): boolean => {
-        if (editorDivRef.current) {
-          editorDivRef.current.focus();
-        }
-        restoreSelection();
-
+        const restoredRange = restoreSelection();
         const sel = window.getSelection();
-        if (!sel || sel.rangeCount === 0 || !editorDivRef.current) {
+        if (!sel || !editorDivRef.current) {
           return false;
         }
 
-        const range = sel.getRangeAt(0);
+        const range = restoredRange || (sel.rangeCount > 0 ? sel.getRangeAt(0) : null);
+        if (!range || !editorDivRef.current.contains(range.commonAncestorContainer)) {
+          return false;
+        }
 
-        // Helper to check if an element has a highlight background or mark tag
-        const isHighlightElement = (el: HTMLElement): boolean => {
+        // Helper to check if an element is a highlight
+        const isHighlightElement = (el: HTMLElement | null): boolean => {
+          if (!el || el === editorDivRef.current) return false;
           const tagName = el.tagName.toLowerCase();
           const bg = el.style.backgroundColor || el.style.background || '';
           const hasBg = Boolean(
@@ -155,15 +193,12 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           return tagName === 'mark' || el.getAttribute('data-highlight') === 'true' || hasBg;
         };
 
-        // Helper to find closest highlight ancestor up to editor root
+        // Helper to find closest highlight ancestor
         const findHighlightAncestor = (node: Node | null): HTMLElement | null => {
           let curr: Node | null = node;
           while (curr && curr !== editorDivRef.current) {
-            if (curr.nodeType === Node.ELEMENT_NODE) {
-              const el = curr as HTMLElement;
-              if (isHighlightElement(el)) {
-                return el;
-              }
+            if (curr.nodeType === Node.ELEMENT_NODE && isHighlightElement(curr as HTMLElement)) {
+              return curr as HTMLElement;
             }
             curr = curr.parentNode;
           }
@@ -180,73 +215,65 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           parent.removeChild(el);
         };
 
-        // Helper to strip highlight styles from an element
-        const stripHighlightStyle = (el: HTMLElement) => {
-          el.style.backgroundColor = '';
-          el.style.removeProperty('background-color');
-          el.style.removeProperty('background');
-          el.style.removeProperty('color');
-          el.style.removeProperty('padding');
-          el.style.removeProperty('border-radius');
-          el.removeAttribute('data-highlight');
-        };
-
         // Case A: Selection is collapsed (cursor at a single point)
         if (range.collapsed) {
           const highlightParent = findHighlightAncestor(range.startContainer);
           if (highlightParent) {
-            // Unmark the highlight container around the cursor
             unwrap(highlightParent);
             handleInput();
             return false; // Unmarked
-          } else {
-            // Try to select word at cursor and highlight it
-            try {
-              sel.modify('move', 'backward', 'word');
-              sel.modify('extend', 'forward', 'word');
-              if (!sel.isCollapsed) {
-                const wordRange = sel.getRangeAt(0);
-                const wordHighlight = findHighlightAncestor(wordRange.startContainer);
-                if (wordHighlight) {
-                  unwrap(wordHighlight);
-                  handleInput();
-                  return false;
-                }
-                const content = wordRange.extractContents();
-                const span = document.createElement('span');
-                span.setAttribute('data-highlight', 'true');
-                span.style.backgroundColor = color;
-                span.style.color = '#1e293b';
-                span.style.padding = '2px 4px';
-                span.style.borderRadius = '4px';
-                span.appendChild(content);
-                wordRange.insertNode(span);
-                wordRange.selectNode(span);
-                sel.removeAllRanges();
-                sel.addRange(wordRange);
-                handleInput();
-                return true; // Marked
-              }
-            } catch {
-              // Fallback
-            }
-            document.execCommand('hiliteColor', false, color);
-            handleInput();
-            return true; // Marked
           }
+
+          // If inside a text node, mark the word at cursor safely without breaking DOM
+          if (range.startContainer.nodeType === Node.TEXT_NODE) {
+            const textNode = range.startContainer as Text;
+            const fullText = textNode.nodeValue || '';
+            const offset = range.startOffset;
+
+            let start = offset;
+            let end = offset;
+            while (start > 0 && /\S/.test(fullText[start - 1])) start--;
+            while (end < fullText.length && /\S/.test(fullText[end])) end++;
+
+            if (end > start) {
+              if (end < fullText.length) {
+                textNode.splitText(end);
+              }
+              let wordNode = textNode;
+              if (start > 0) {
+                wordNode = textNode.splitText(start);
+              }
+
+              const mark = document.createElement('mark');
+              mark.setAttribute('data-highlight', 'true');
+              mark.style.backgroundColor = color;
+              mark.style.color = '#1e293b';
+              mark.style.padding = '2px 4px';
+              mark.style.borderRadius = '4px';
+
+              wordNode.parentNode?.insertBefore(mark, wordNode);
+              mark.appendChild(wordNode);
+
+              const newRange = document.createRange();
+              newRange.selectNodeContents(mark);
+              sel.removeAllRanges();
+              sel.addRange(newRange);
+              savedRangeRef.current = newRange.cloneRange();
+
+              handleInput();
+              return true; // Marked
+            }
+          }
+          return false;
         }
 
-        // Case B: Selection is not collapsed (user selected a range of text)
-        // Check if selection is already inside or intersects a highlight
-        const commonHighlight = findHighlightAncestor(range.commonAncestorContainer);
-        const startHighlight = findHighlightAncestor(range.startContainer);
-        const endHighlight = findHighlightAncestor(range.endContainer);
+        // Case B: Selection is NOT collapsed (user selected a range of text)
+        // Check if selection intersects any existing highlights
+        const allHighlights = Array.from(
+          editorDivRef.current.querySelectorAll('mark, [data-highlight="true"]')
+        ).filter((el) => isHighlightElement(el as HTMLElement)) as HTMLElement[];
 
-        const allHighlightsInEditor = Array.from(
-          editorDivRef.current.querySelectorAll('mark, [data-highlight="true"], span')
-        ).filter((el) => isHighlightElement(el as HTMLElement));
-
-        const intersectingHighlights = allHighlightsInEditor.filter((el) => {
+        const intersectingHighlights = allHighlights.filter((el) => {
           try {
             return range.intersectsNode(el);
           } catch {
@@ -254,114 +281,94 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(
           }
         });
 
-        const isAlreadyMarked = Boolean(
-          commonHighlight ||
-          startHighlight ||
-          endHighlight ||
-          intersectingHighlights.length > 0
-        );
+        const ancestorHighlight = findHighlightAncestor(range.commonAncestorContainer) ||
+          findHighlightAncestor(range.startContainer) ||
+          findHighlightAncestor(range.endContainer);
 
-        if (isAlreadyMarked) {
-          // ==================== DESMARCAR (UNMARK) ====================
-          if (commonHighlight) {
-            const highlightText = commonHighlight.textContent || '';
-            const selectedText = range.toString();
+        if (ancestorHighlight || intersectingHighlights.length > 0) {
+          // ==================== UNMARK ====================
+          if (ancestorHighlight) {
+            unwrap(ancestorHighlight);
+          }
+          intersectingHighlights.forEach((el) => unwrap(el));
+          handleInput();
+          return false; // Unmarked
+        }
 
-            if (highlightText.trim() === selectedText.trim() || highlightText === selectedText) {
-              unwrap(commonHighlight);
-            } else {
-              // Partial unhighlight inside commonHighlight:
-              // Split into before, middle (unmarked), and after
-              const beforeRange = document.createRange();
-              beforeRange.setStart(commonHighlight, 0);
-              beforeRange.setEnd(range.startContainer, range.startOffset);
-              const beforeFrag = beforeRange.cloneContents();
-
-              const afterRange = document.createRange();
-              afterRange.setStart(range.endContainer, range.endOffset);
-              afterRange.setEnd(commonHighlight, commonHighlight.childNodes.length);
-              const afterFrag = afterRange.cloneContents();
-
-              const middleFrag = range.extractContents();
-              // Clean up any inner highlight elements in middle
-              const innerMarks = middleFrag.querySelectorAll('mark, [data-highlight="true"], span');
-              innerMarks.forEach((m) => {
-                const el = m as HTMLElement;
-                if (isHighlightElement(el)) {
-                  stripHighlightStyle(el);
-                  if (el.tagName.toLowerCase() === 'mark') unwrap(el);
-                }
-              });
-
-              const parent = commonHighlight.parentNode;
-              if (parent) {
-                const frag = document.createDocumentFragment();
-
-                if (beforeFrag.textContent && beforeFrag.textContent.length > 0) {
-                  const beforeEl = commonHighlight.cloneNode(false) as HTMLElement;
-                  beforeEl.appendChild(beforeFrag);
-                  frag.appendChild(beforeEl);
-                }
-
-                const middleEl = document.createElement('span');
-                middleEl.appendChild(middleFrag);
-                frag.appendChild(middleEl);
-
-                if (afterFrag.textContent && afterFrag.textContent.length > 0) {
-                  const afterEl = commonHighlight.cloneNode(false) as HTMLElement;
-                  afterEl.appendChild(afterFrag);
-                  frag.appendChild(afterEl);
-                }
-
-                parent.replaceChild(frag, commonHighlight);
-
-                // Reselect middle unmarked text
-                const newRange = document.createRange();
-                newRange.selectNodeContents(middleEl);
-                sel.removeAllRanges();
-                sel.addRange(newRange);
+        // ==================== MARK (Safe Text-Node Level Wrapping) ====================
+        // Collect all Text nodes intersecting the range inside editorDivRef
+        const textNodes: Text[] = [];
+        const walker = document.createTreeWalker(
+          editorDivRef.current,
+          NodeFilter.SHOW_TEXT,
+          {
+            acceptNode: (node) => {
+              try {
+                return range.intersectsNode(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+              } catch {
+                return NodeFilter.FILTER_REJECT;
               }
             }
           }
+        );
 
-          // Strip styling & unwrap any other intersecting highlight elements
-          intersectingHighlights.forEach((el) => {
-            const htmlEl = el as HTMLElement;
-            stripHighlightStyle(htmlEl);
-            if (
-              htmlEl.tagName.toLowerCase() === 'mark' ||
-              (!htmlEl.getAttribute('style') && htmlEl.tagName.toLowerCase() === 'span')
-            ) {
-              unwrap(htmlEl);
-            }
-          });
-
-          // Secondary browser native cleanup
-          try {
-            document.execCommand('hiliteColor', false, 'transparent');
-          } catch {}
-
-          handleInput();
-          return false; // Successfully unmarked
-        } else {
-          // ==================== MARCAR (MARK) ====================
-          const content = range.extractContents();
-          const span = document.createElement('span');
-          span.setAttribute('data-highlight', 'true');
-          span.style.backgroundColor = color;
-          span.style.color = '#1e293b';
-          span.style.padding = '2px 4px';
-          span.style.borderRadius = '4px';
-          span.appendChild(content);
-
-          range.insertNode(span);
-          range.selectNode(span);
-          sel.removeAllRanges();
-          sel.addRange(range);
-
-          handleInput();
-          return true; // Successfully marked
+        let curr = walker.nextNode();
+        while (curr) {
+          textNodes.push(curr as Text);
+          curr = walker.nextNode();
         }
+
+        if (textNodes.length === 0) {
+          return false;
+        }
+
+        const createdMarks: HTMLElement[] = [];
+
+        textNodes.forEach((node) => {
+          const isStartNode = node === range.startContainer;
+          const isEndNode = node === range.endContainer;
+          const nodeLen = node.nodeValue?.length || 0;
+          const startOffset = isStartNode ? Math.min(range.startOffset, nodeLen) : 0;
+          const endOffset = isEndNode ? Math.min(range.endOffset, nodeLen) : nodeLen;
+
+          if (startOffset >= endOffset) {
+            return;
+          }
+
+          if (endOffset < nodeLen) {
+            node.splitText(endOffset);
+          }
+
+          let nodeToWrap = node;
+          if (startOffset > 0) {
+            nodeToWrap = node.splitText(startOffset);
+          }
+
+          if (nodeToWrap.nodeValue && nodeToWrap.nodeValue.trim().length > 0) {
+            const mark = document.createElement('mark');
+            mark.setAttribute('data-highlight', 'true');
+            mark.style.backgroundColor = color;
+            mark.style.color = '#1e293b';
+            mark.style.padding = '2px 4px';
+            mark.style.borderRadius = '4px';
+
+            nodeToWrap.parentNode?.insertBefore(mark, nodeToWrap);
+            mark.appendChild(nodeToWrap);
+            createdMarks.push(mark);
+          }
+        });
+
+        if (createdMarks.length > 0) {
+          const newRange = document.createRange();
+          newRange.setStartBefore(createdMarks[0]);
+          newRange.setEndAfter(createdMarks[createdMarks.length - 1]);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+          savedRangeRef.current = newRange.cloneRange();
+        }
+
+        handleInput();
+        return true; // Marked
       },
 
       applyFontColor: (color: string) => {
