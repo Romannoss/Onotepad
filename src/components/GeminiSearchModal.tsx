@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Markdown from 'react-markdown';
+import { apiFetch } from '../utils/apiClient';
 import {
   Sparkles,
   Search,
@@ -70,18 +71,10 @@ export const GeminiSearchModal: React.FC<GeminiSearchModalProps> = ({
         payload.context = activeNoteContent;
       }
 
-      const res = await fetch('/api/gemini/search', {
+      const data = await apiFetch('/api/gemini/search', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(payload),
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Erro ao consultar Gemini');
-      }
 
       setResult(data.result);
     } catch (err: any) {

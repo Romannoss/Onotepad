@@ -780,6 +780,10 @@ export default function App() {
       <GeminiVoiceReaderModal
         isOpen={isVoiceReaderOpen}
         onClose={() => setIsVoiceReaderOpen(false)}
+        onBack={() => {
+          setIsVoiceReaderOpen(false);
+          setIsMenuOpen(true);
+        }}
         noteTitle={activeNote.title}
         noteContent={activeNote.content}
         theme={settings.theme}

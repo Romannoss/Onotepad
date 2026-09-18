@@ -8,6 +8,40 @@ const PORT = 3000;
 
 app.use(express.json({ limit: "15mb" }));
 
+// Enable CORS for Android Capacitor (capacitor://localhost, http://localhost) and cross-origin clients
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept");
+  if (req.method === "OPTIONS") {
+    res.sendStatus(200);
+    return;
+  }
+  next();
+});
+
+// Helper to wrap 16-bit mono PCM into standard WAV buffer
+function pcmToWav(pcmBuffer: Buffer, sampleRate = 24000, numChannels = 1, bitsPerSample = 16): Buffer {
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+  const dataSize = pcmBuffer.length;
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + dataSize, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(dataSize, 40);
+  return Buffer.concat([header, pcmBuffer]);
+}
+
 // Lazy/safe initialization of Gemini AI
 function getGeminiClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -62,16 +96,31 @@ app.post("/api/gemini/search", async (req: Request, res: Response): Promise<void
       }`;
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
-      contents: prompt,
-      config: {
-        systemInstruction,
-        temperature: 0.7,
-      },
-    });
+    let text = "";
+    const modelsToTry = ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.1-flash-lite", "gemini-3.8-flash"];
+    for (const modelName of modelsToTry) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+          config: {
+            systemInstruction,
+            temperature: 0.7,
+          },
+        });
+        if (response.text && response.text.trim()) {
+          text = response.text.trim();
+          break;
+        }
+      } catch (err: any) {
+        console.warn(`Model ${modelName} returned error in search, trying fallback:`, err?.message);
+      }
+    }
 
-    const text = response.text || "Nenhuma resposta foi gerada.";
+    if (!text) {
+      text = "Não foi possível gerar uma resposta no momento. Por favor, tente novamente.";
+    }
+
     res.json({ result: text, query, mode });
   } catch (error: any) {
     console.error("Erro na chamada Gemini:", error);
@@ -81,22 +130,53 @@ app.post("/api/gemini/search", async (req: Request, res: Response): Promise<void
   }
 });
 
+// Clean text helper when offline or during Gemini API demand spikes
+function cleanTextForSpeech(text: string, mode: "read" | "summary"): string {
+  let cleaned = text
+    .replace(/^#+\s+/gm, "")
+    .replace(/(\*\*|__)(.*?)\1/g, "$2")
+    .replace(/(\*|_)(.*?)\1/g, "$2")
+    .replace(/~~(.*?)~~/g, "$1")
+    .replace(/`{1,3}[^`]*`{1,3}/g, "")
+    .replace(/!\[.*?\]\(.*?\)/g, "")
+    .replace(/\[(.*?)\]\(.*?\)/g, "$1")
+    .replace(/^[-*+]\s+/gm, "• ")
+    .replace(/^\d+\.\s+/gm, "")
+    .replace(/https?:\/\/\S+/gi, "link")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  if (mode === "summary") {
+    const sentences = cleaned
+      .split(/(?<=[.!?])\s+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 15);
+    if (sentences.length > 3) {
+      return `Resumo da nota: ${sentences.slice(0, 3).join(" ")}`;
+    }
+  }
+  return cleaned;
+}
+
 // Endpoint para preparar o conteúdo da nota para locução e leitura em voz alta com IA Gemini
 app.post("/api/gemini/read-note", async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { content, mode = "read" } = req.body;
-    if (!content || typeof content !== "string" || !content.trim()) {
-      res.status(400).json({ error: "O conteúdo da nota está vazio para leitura." });
-      return;
-    }
+  const { content, mode = "read", voice = "Aoede", generateAudio = false } = req.body;
+  if (!content || typeof content !== "string" || !content.trim()) {
+    res.status(400).json({ error: "O conteúdo da nota está vazio para leitura." });
+    return;
+  }
 
+  let preparedText = "";
+  let audioBase64: string | null = null;
+
+  try {
     const ai = getGeminiClient();
     let prompt = "";
     let systemInstruction = "";
 
     if (mode === "summary") {
       systemInstruction =
-        "Você é o leitor de voz do Bloco de Notas Android. Seu papel é resumir em voz alta em português brasileiro os pontos mais importantes da nota para quem está ouvindo. Seja direto, fale como um locutor amigável, sem metatexto, sem introduções como 'Aqui está o resumo'. Vá direto ao que deve ser falado.";
+        "Você é o leitor de voz oficial do Bloco de Notas Android. Seu papel é resumir em voz alta em português brasileiro os pontos mais importantes da nota para quem está ouvindo. Seja direto, fale como um locutor amigável, sem metatexto, sem introduções como 'Aqui está o resumo'. Vá direto ao que deve ser falado.";
       prompt = `Crie um resumo falado de 2 a 4 frases claras e naturais para ser ouvido em áudio desta nota:\n\n${content.slice(0, 10000)}`;
     } else {
       systemInstruction =
@@ -104,22 +184,70 @@ app.post("/api/gemini/read-note", async (req: Request, res: Response): Promise<v
       prompt = `Leia e vocalize em formato de locução fluida o conteúdo da seguinte nota:\n\n${content.slice(0, 10000)}`;
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
-      contents: prompt,
-      config: {
-        systemInstruction,
-        temperature: 0.3,
-      },
-    });
+    // Try models in order: gemini-3.6-flash -> gemini-flash-latest -> gemini-3.1-flash-lite -> gemini-3.8-flash
+    const modelsToTry = ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.1-flash-lite", "gemini-3.8-flash"];
+    let aiSuccess = false;
 
-    const preparedText = response.text || content;
-    res.json({ preparedText, mode });
+    for (const modelName of modelsToTry) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+          config: {
+            systemInstruction,
+            temperature: 0.3,
+          },
+        });
+        if (response.text && response.text.trim()) {
+          preparedText = response.text.trim();
+          aiSuccess = true;
+          break;
+        }
+      } catch (err: any) {
+        console.warn(`Model ${modelName} returned error in read-note, trying fallback:`, err?.message);
+      }
+    }
+
+    if (!aiSuccess) {
+      preparedText = cleanTextForSpeech(content, mode);
+    }
+
+    // Optional native Gemini neural voice audio generation
+    if (generateAudio) {
+      try {
+        const textToSpeak = (preparedText || content).slice(0, 1500);
+        const ttsResponse = await ai.models.generateContent({
+          model: "gemini-3.1-flash-tts-preview",
+          contents: `Leia exatamente o seguinte texto em áudio: ${textToSpeak}`,
+          config: {
+            responseModalities: ["AUDIO"],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: {
+                  voiceName: voice || "Aoede",
+                },
+              },
+            },
+          },
+        });
+
+        const inline = ttsResponse.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
+        if (inline?.inlineData?.data) {
+          const rawPcm = Buffer.from(inline.inlineData.data, "base64");
+          const wav = pcmToWav(rawPcm, 24000);
+          audioBase64 = `data:audio/wav;base64,${wav.toString("base64")}`;
+        }
+      } catch (ttsErr: any) {
+        console.warn("Gemini TTS audio generation fallback:", ttsErr?.message);
+      }
+    }
+
+    res.json({ preparedText, mode, voice, audioBase64 });
   } catch (error: any) {
     console.error("Erro na leitura Gemini:", error);
-    res.status(500).json({
-      error: error?.message || "Erro ao preparar locução com Gemini.",
-    });
+    // Even if Gemini client threw, return cleaned text with 200 so UI NEVER fails
+    const fallbackText = cleanTextForSpeech(content, mode);
+    res.json({ preparedText: fallbackText, mode, voice, audioBase64: null });
   }
 });
 

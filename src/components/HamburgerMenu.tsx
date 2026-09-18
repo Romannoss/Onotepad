@@ -177,7 +177,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                   <div className="flex items-center gap-2">
                     <h3 className="font-bold text-base text-slate-100">Menu de Opções</h3>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      v4.2
+                      v4.7.1
                     </span>
                   </div>
                   <p className="text-xs text-slate-400">
@@ -583,7 +583,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                         </div>
                       </div>
                       <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                        v4.5
+                        v4.7.1
                       </span>
                     </button>
                   )}
@@ -649,7 +649,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
 
             {/* Bottom info */}
             <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-              <span>Bloco de Notas Android • v4.5</span>
+              <span>Bloco de Notas Android • v4.7.1</span>
               <span className="flex items-center gap-1">
                 <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 Salvamento Automático Ativo
